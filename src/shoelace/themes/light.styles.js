@@ -453,13 +453,16 @@ export default css`
 
   @supports (scrollbar-gutter: stable) {
     .sl-scroll-lock {
-      scrollbar-gutter: stable !important;
+      scrollbar-gutter: var(--sl-scroll-lock-gutter) !important;
+    }
+
+    .sl-scroll-lock body {
       overflow: hidden !important;
     }
   }
 
   @supports not (scrollbar-gutter: stable) {
-    .sl-scroll-lock {
+    .sl-scroll-lock body {
       padding-right: var(--sl-scroll-lock-size) !important;
       overflow: hidden !important;
     }

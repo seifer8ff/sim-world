@@ -12,9 +12,20 @@ After cloning the repository:
   npm ci
   ```
 
-- You may need to manually install the shader code:
+- You will need to manually install the shader code:
+  Clone the modified tilemap shader:
   https://github.com/seifer8ff/tilemap-with-tint/tree/v4.x
-  After install, in this repo, run:
+  After clone, switch to feat-tint branch and install dependencies:
+
+  ```powershell
+  cd tilemap-with-tint
+  git checkout feat-tint
+  npm ci
+  ```
+
+  Installing the depencencies also builds the project, readying it for install.
+
+  Navigate back to this repo and run:
 
   ```powershell
   npx install-local --save ../tilemap-with-tint
@@ -22,7 +33,7 @@ After cloning the repository:
 
   This will install the local shader code into the project properly.
 
-- To build the assets, run:
+- To build the assets, ensure you're using node v18.20.7 (can be managed easily using NVM) and then run:
 
   ```powershell
   npm run build:assets
