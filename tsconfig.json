@@ -1,17 +1,16 @@
 {
-    "compilerOptions": {
-        "target": "es6",
-        "module": "es6",
-        "esModuleInterop": true,
-        "moduleResolution": "Node",
-        "resolveJsonModule": true,
-        "allowJs": true,
-        "lib": [
-            "dom",
-            "es2015"
-        ]
-    },
-    "include": [
-        "src/*"
-    ]
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "esModuleInterop": true,
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["dom", "es2015"],
+    "outDir": "./dist"
+  },
+  "include": ["src/*"],
+  "exclude": ["./dist/**/*"]
 }

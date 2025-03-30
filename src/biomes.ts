@@ -1,6 +1,11 @@
-import { Map, ValueMap, BiomeMap, MapWorld } from "./map-world";
+import { MapType, ValueMap, BiomeMap, MapWorld } from "./map-world";
+import { positionToIndex } from "./misc-utility";
+import { Layer } from "./renderer";
 
 export const ImpassibleBorder: BiomeId[] = [
+  // actors cannot move into or out of these biomes
+  // without additional movement or abilities
+  // for now, totally impassible
   "ocean",
   "oceandeep",
   "hillslow",
@@ -11,7 +16,6 @@ export const ImpassibleBorder: BiomeId[] = [
 ];
 
 export type BiomeId =
-  | "default"
   | "ocean"
   | "beach"
   | "moistdirt"
@@ -25,7 +29,7 @@ export type BiomeId =
   | "hillgrass"
   | "swamp"
   | "oceandeep"
-  | "snowsandydirt"
+  // | "snowsandydirt"
   | "snowmoistdirt"
   | "snowhillshillsmid";
 
@@ -76,27 +80,32 @@ export class Biomes {
     x: number,
     y: number,
     maps: {
-      height: ValueMap;
-      temperature: ValueMap;
-      moisture: ValueMap;
+      height: Map<number, number>;
+      temperature: Map<number, number>;
+      moisture: Map<number, number>;
     },
     generationOptions: GenerationOptions
   ): boolean {
-    const pos = MapWorld.coordsToKey(x, y);
+    const index = positionToIndex(x, y, Layer.TERRAIN);
     // loop through values in GenerationOptions
     if (generationOptions.height) {
-      if (!Biomes.inRangeOf(maps.height[pos], generationOptions.height)) {
+      if (!Biomes.inRangeOf(maps.height.get(index), generationOptions.height)) {
         return false;
       }
     }
     if (generationOptions.moisture) {
-      if (!Biomes.inRangeOf(maps.moisture[pos], generationOptions.moisture)) {
+      if (
+        !Biomes.inRangeOf(maps.moisture.get(index), generationOptions.moisture)
+      ) {
         return false;
       }
     }
     if (generationOptions.temperature) {
       if (
-        !Biomes.inRangeOf(maps.temperature[pos], generationOptions.temperature)
+        !Biomes.inRangeOf(
+          maps.temperature.get(index),
+          generationOptions.temperature
+        )
       ) {
         return false;
       }
@@ -117,7 +126,7 @@ export class Biomes {
     return value;
   }
 
-  static readonly Biomes: { [key in BiomeId]?: Biome } = {
+  static readonly Biomes: { [key in BiomeId]: Biome } = {
     ocean: {
       id: "ocean",
       name: "Ocean",
@@ -393,4 +402,8 @@ export class Biomes {
   };
 
   constructor() {}
+
+  public static getBiome(id: BiomeId): Biome {
+    return Biomes.Biomes[id];
+  }
 }

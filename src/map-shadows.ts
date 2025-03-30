@@ -1,11 +1,10 @@
 import { Game } from "./game";
-import { Tile, TileType } from "./tile";
-import Simplex from "rot-js/lib/noise/simplex";
 import { LightManager } from "./light-manager";
-import { inverseLerp, lerp, normalizeNoise } from "./misc-utility";
+import { indexToXY, lerp, positionToIndex } from "./misc-utility";
 import { HeightLayer, MapWorld } from "./map-world";
 import { Point } from "./point";
-import { Biome } from "./biomes";
+import { GameSettings } from "./game-settings";
+import { Layer } from "./renderer";
 
 export enum LightPhase {
   "rising" = 0,
@@ -19,6 +18,12 @@ export enum SunLevels {
   Clear = "Clear",
   Overcast = "Overcast",
   Dark = "Dark",
+}
+
+export enum SunDirection {
+  Sunup,
+  Sundown,
+  Topdown,
 }
 
 // export const TempMap = {
@@ -62,12 +67,13 @@ export const HeightDropoff = {
 //   HighHill: 1.5,
 // };
 
+// TODO: ENTIRE CLASS NEEDS TO BE REWORKED
+// CALCULATE SHADOWS REGULARLY, RATHER THAN THE ENTIRE MAP AT ONCE
 export class MapShadows {
   public lightManager: LightManager;
-  public shadowMap: { [key: string]: number };
-  public targetShadowMap: { [key: string]: number };
-  public occlusionMap: { [key: string]: number }; // TODO: NEW
-  public targetOcclusionMap: { [key: string]: number }; // TODO: NEW
+  public shadowMap: number[];
+  public targetShadowMap: number[];
+  public occlusionMap: number[];
   public minShadowLength: number;
   public maxShadowLength: number;
   public shadowLength: number;
@@ -76,31 +82,16 @@ export class MapShadows {
   public ambientLightStrength: number;
   public sundownOffsetMap: [number, number][][];
   public sunupOffsetMap: [number, number][][];
-  public dropoffMaps: {
-    [direction: string]: {
-      [shadowLength: string]: { [index: string]: number };
-    };
-  };
+  public sundownDropoffMap: Map<number, Map<number, number>>;
+  public sunupDropoffMap: Map<number, Map<number, number>>;
+  public topdownDropoffMap: Map<number, Map<number, number>>;
   private oldShadowLength: number;
   private oldPhase: LightPhase;
-  private testKey = `106,89`;
 
   constructor(private game: Game, private map: MapWorld) {
-    this.shadowMap = {};
-    this.targetShadowMap = {};
-    this.occlusionMap = {};
-    this.targetOcclusionMap = {};
-
-    let key: string;
-    for (let i = 0; i < this.game.options.gameSize.width; i++) {
-      for (let j = 0; j < this.game.options.gameSize.height; j++) {
-        key = MapWorld.coordsToKey(i, j);
-        this.shadowMap[key] = 1;
-        this.targetShadowMap[key] = 1;
-        this.occlusionMap[key] = 1;
-        this.targetOcclusionMap[key] = 1;
-      }
-    }
+    this.shadowMap = [];
+    this.targetShadowMap = [];
+    this.occlusionMap = [];
 
     this.shadowStrength = 1;
     this.ambientOcclusionShadowStrength = 1;
@@ -112,15 +103,25 @@ export class MapShadows {
     this.oldPhase = this.game.timeManager.lightPhase;
     this.sunupOffsetMap = [];
     this.sundownOffsetMap = [];
-    this.dropoffMaps = {};
-    this.dropoffMaps["sunup"] = {};
-    this.dropoffMaps["sundown"] = {};
-    this.dropoffMaps["topdown"] = {};
+    this.sundownDropoffMap = new Map();
+    this.sunupDropoffMap = new Map();
+    this.topdownDropoffMap = new Map();
     for (let i = 0; i < this.maxShadowLength + 1; i++) {
       // start with 0 instead of minShadowLength to account for special case shadow maps, like the topdown map
-      this.dropoffMaps["sunup"][i] = {};
-      this.dropoffMaps["sundown"][i] = {};
-      this.dropoffMaps["topdown"][i] = {};
+      this.sundownDropoffMap.set(i, new Map());
+      this.sunupDropoffMap.set(i, new Map());
+      this.topdownDropoffMap.set(i, new Map());
+    }
+  }
+
+  public init() {
+    this.shadowMap = [];
+    this.targetShadowMap = [];
+    this.occlusionMap = [];
+    // only update the shadow map for the viewport tiles
+    for (let posIndex of this.game.userInterface.camera.viewportTilesPadded) {
+      this.targetShadowMap[posIndex] = 1;
+      this.occlusionMap[posIndex] = 1;
     }
   }
 
@@ -135,20 +136,13 @@ export class MapShadows {
     // const sortedCoordMap = this.sortByHeight(this.map.biomeMap);
 
     // this.sortedCoordMap = this.orientMapReverse(); // working properly
+    const tileIndexes = this.game.userInterface.camera.viewportTilesPadded;
     this.sunupOffsetMap = this.calcSunupMap();
     this.sundownOffsetMap = this.calcSundownMap();
     this.generateDropoffMaps();
-    this.updateOcclusionShadowMap(false);
-    this.updateOcclusionShadowMap(true);
-    this.updateShadowMap(false, "sunup");
-    this.updateShadowMap(true, "sunup");
-    console.log(
-      "initial sunmap update done",
-      this.shadowMap,
-      this.targetShadowMap,
-      this.occlusionMap,
-      this.targetOcclusionMap
-    );
+    this.updateOcclusionShadowMap(tileIndexes);
+    this.updateShadowMap(false, SunDirection.Sunup);
+    this.updateShadowMap(true, SunDirection.Sunup);
     this.interpolateShadowState(
       this.game.userInterface.camera.viewportTilesUnpadded
     );
@@ -167,7 +161,7 @@ export class MapShadows {
           i,
           j,
           this.sunupOffsetMap,
-          "sunup"
+          SunDirection.Sunup
         );
       }
     }
@@ -181,13 +175,13 @@ export class MapShadows {
           i,
           j,
           this.sundownOffsetMap,
-          "sundown"
+          SunDirection.Sundown
         );
       }
     }
 
-    for (let i = 0; i < this.game.options.gameSize.width; i++) {
-      for (let j = 0; j < this.game.options.gameSize.height; j++) {
+    for (let i = 0; i < GameSettings.options.gameSize.width; i++) {
+      for (let j = 0; j < GameSettings.options.gameSize.height; j++) {
         const adjacent = this.map.getAdjacent(i, j, heightLayerAdjacencyMap);
         if (adjacent) {
           this.calcTopDownDropoff(i, j, adjacent);
@@ -196,56 +190,53 @@ export class MapShadows {
     }
   }
 
-  public updateOcclusionShadowMap(calculateTarget: boolean = true) {
-    let mapToUpdate = {};
-    if (calculateTarget) {
-      for (let key in this.targetOcclusionMap) {
-        mapToUpdate[key] = this.targetOcclusionMap[key];
-      }
-    } else {
-      for (let key in this.occlusionMap) {
-        mapToUpdate[key] = this.occlusionMap[key];
-      }
-    }
-    for (let x = 0; x < this.game.options.gameSize.width; x++) {
-      for (let y = 0; y < this.game.options.gameSize.height; y++) {
-        const key = MapWorld.coordsToKey(x, y);
-        mapToUpdate[key] = this.getShadowFor(x, y, "topdown");
-      }
-    }
-
-    if (!calculateTarget) {
-      for (let key in this.occlusionMap) {
-        this.occlusionMap[key] = mapToUpdate[key];
-      }
-    } else {
-      for (let key in this.targetOcclusionMap) {
-        this.targetOcclusionMap[key] = mapToUpdate[key];
-      }
+  public updateOcclusionShadowMap(tileIndexes: number[]) {
+    let posIndex: number;
+    let posXY: [number, number];
+    for (let i = 0; i < tileIndexes.length; i++) {
+      posIndex = tileIndexes[i];
+      posXY = indexToXY(posIndex, Layer.TERRAIN);
+      this.occlusionMap[posIndex] = this.getCastShadowFor(
+        posXY[0],
+        posXY[1],
+        SunDirection.Topdown
+      );
     }
   }
 
-  public updateShadowMap(calculateTarget = true, dir: "sunup" | "sundown") {
-    let mapToUpdate = {};
+  public updateShadowMap(calculateTarget = true, dir: SunDirection) {
+    let mapToUpdate = [];
     if (calculateTarget) {
       mapToUpdate = this.targetShadowMap;
     } else {
       mapToUpdate = this.shadowMap;
     }
     const offsetMap =
-      dir === "sunup" ? this.sunupOffsetMap : this.sundownOffsetMap;
+      dir === SunDirection.Sunup ? this.sunupOffsetMap : this.sundownOffsetMap; // only sunup and sundown maps need to be updated, as theyre dynamic
     for (let i = 0; i < offsetMap.length; i++) {
       for (let j = 0; j < offsetMap[i].length; j++) {
         const coords = offsetMap[i][j];
         const x = coords[0];
         const y = coords[1];
-        mapToUpdate[MapWorld.coordsToKey(x, y)] = this.getShadowFor(x, y, dir);
+        if (this.game.userInterface.camera.inViewport(x, y)) {
+          mapToUpdate[positionToIndex(x, y, Layer.TERRAIN)] =
+            this.getCastShadowFor(x, y, dir);
+        }
       }
     }
+    // for (let i = 0; i < offsetMap.length; i++) {
+    //   for (let j = 0; j < offsetMap[i].length; j++) {
+    //     const coords = offsetMap[i][j];
+    //     const x = coords[0];
+    //     const y = coords[1];
+    //     mapToUpdate[positionToIndex(x, y, Layer.TERRAIN)] =
+    //       this.getCastShadowFor(x, y, dir);
+    //   }
+    // }
   }
 
   public turnUpdate() {
-    if (!this.game.options.enableShadows) return;
+    if (!GameSettings.options.toggles.enableShadows) return;
     // shadow strength only changes when the time of day changes,
     // which only changes after a turn is taken
     this.interpolateStrength();
@@ -255,17 +246,11 @@ export class MapShadows {
   }
 
   public renderUpdate(interpPercent: number) {
-    if (
-      !this.game.options.enableShadows ||
-      !this.game.options.enableAnimatedShadows
-    )
-      return;
-    if (!this.game.timeManager.isPaused) {
-      // move towards targetShadowMap from shadowMap every frame
-      this.interpolateShadowState(
-        this.game.userInterface.camera.viewportTilesUnpadded
-      );
-    }
+    if (!GameSettings.options.toggles.enableShadows) return;
+    // move towards targetShadowMap from shadowMap every frame
+    this.interpolateShadowState(
+      this.game.userInterface.camera.viewportTilesPadded
+    );
   }
 
   private updateShadowDirection() {
@@ -284,11 +269,11 @@ export class MapShadows {
     }
   }
 
-  private getShadowDir(): "sunup" | "sundown" {
+  private getShadowDir(): SunDirection {
     return this.game.timeManager.lightPhase === LightPhase.rising ||
       this.game.timeManager.lightPhase === LightPhase.peak
-      ? "sunup"
-      : "sundown";
+      ? SunDirection.Sunup
+      : SunDirection.Sundown;
   }
 
   private interpolateStrength() {
@@ -330,15 +315,15 @@ export class MapShadows {
     this.shadowStrength = Math.round(shadowStrength * 1000) / 1000;
   }
 
-  public interpolateShadowState(keys: string[]) {
+  public interpolateShadowState(tileIndexes: number[]) {
     // smoothly transition between shadowMap and targetShadowMap over time
     let val: number;
     const progress = this.game.timeManager.turnAnimTimePercent;
-    // console.log(progress);
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i];
-      val = lerp(progress, this.shadowMap[key], this.targetShadowMap[key]);
-      this.shadowMap[key] = val;
+    let index: number;
+    for (let i = 0; i < tileIndexes.length; i++) {
+      index = tileIndexes[i];
+      val = lerp(progress, this.shadowMap[index], this.targetShadowMap[index]);
+      this.shadowMap[index] = val;
     }
   }
 
@@ -346,8 +331,8 @@ export class MapShadows {
   //   map: { [key: string]: Biome },
   //   vector: Point = new Point(1, 1)
   // ): string[] {
-  //   const rows = this.game.options.gameSize.height;
-  //   const columns = this.game.options.gameSize.width;
+  //   const rows = GameSettings.options.gameSize.height;
+  //   const columns = GameSettings.options.gameSize.width;
   //   const total = columns + rows - 1;
   //   const result = [];
 
@@ -363,14 +348,12 @@ export class MapShadows {
   // }
 
   private calcSundownMap(): [number, number][][] {
-    const rows = this.game.options.gameSize.height;
-    const columns = this.game.options.gameSize.width;
-    const total = columns + rows - 1;
+    const rows = GameSettings.options.gameSize.height;
+    const columns = GameSettings.options.gameSize.width;
     const result = [];
 
     for (let i = 0; i < rows; i++) {
       for (let j = 0; j < columns; j++) {
-        const key = MapWorld.coordsToKey(j, i);
         const el = [j, i];
         const pos = j + rows - i - 1;
 
@@ -386,14 +369,12 @@ export class MapShadows {
   }
 
   private calcSunupMap(): [number, number][][] {
-    const rows = this.game.options.gameSize.height;
-    const columns = this.game.options.gameSize.width;
-    const total = columns + rows - 1;
+    const rows = GameSettings.options.gameSize.height;
+    const columns = GameSettings.options.gameSize.width;
     const result = [];
 
     for (let i = rows; i >= 0; i--) {
       for (let j = 0; j < columns; j++) {
-        const key = MapWorld.coordsToKey(i, j);
         const el = [i, j];
         const pos = i + j;
 
@@ -442,27 +423,51 @@ export class MapShadows {
     row: number,
     index: number,
     coordMap: [number, number][][],
-    mapKey: string
+    mapKey: SunDirection
   ): number {
-    const key = MapWorld.coordsToKey(x, y);
-    const heightLevel = this.map.heightLayerMap[key];
+    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
+    const heightLevel = this.map.heightLayerMap.get(posIndex);
 
-    let lastRow;
-    let lastHeightLevel;
+    let lastPosIndex = -1;
+    let lastPos = [];
+    let lastRow: [number, number][];
+    let lastHeightLevel: HeightLayer;
     let dropoff = 0;
 
     for (let i = this.minShadowLength; i < this.maxShadowLength + 1; i++) {
       lastRow = coordMap[row - i];
       const lastIndex = index - i;
-      lastHeightLevel = lastRow
-        ? this.map.heightLayerMap[lastRow[lastIndex]]
-        : heightLevel;
+      if (!lastRow || lastIndex < 0) {
+        lastHeightLevel = heightLevel;
+      } else {
+        lastPos = lastRow[lastIndex];
+        lastPosIndex = positionToIndex(lastPos[0], lastPos[1], Layer.TERRAIN);
+        lastHeightLevel = lastRow
+          ? this.map.heightLayerMap.get(lastPosIndex)
+          : heightLevel;
+      }
 
       dropoff = this.getHeightDropoff(heightLevel, lastHeightLevel);
-      if (this.dropoffMaps[mapKey][i] === undefined) {
-        this.dropoffMaps[mapKey][i] = {};
+      switch (mapKey) {
+        case SunDirection.Sunup:
+          if (this.sunupDropoffMap.get(i) === undefined) {
+            this.sunupDropoffMap.set(i, new Map());
+          }
+          this.sunupDropoffMap.get(i).set(posIndex, dropoff);
+          break;
+        case SunDirection.Sundown:
+          if (this.sundownDropoffMap.get(i) === undefined) {
+            this.sundownDropoffMap.set(i, new Map());
+          }
+          this.sundownDropoffMap.get(i).set(posIndex, dropoff);
+          break;
+        case SunDirection.Topdown:
+          if (this.topdownDropoffMap.get(i) === undefined) {
+            this.topdownDropoffMap.set(i, new Map());
+          }
+          this.topdownDropoffMap.get(i).set(posIndex, dropoff);
+          break;
       }
-      this.dropoffMaps[mapKey][i][key] = dropoff;
     }
 
     return dropoff;
@@ -473,8 +478,8 @@ export class MapShadows {
     y: number,
     adjacent: HeightLayer[]
   ): number {
-    const key = MapWorld.coordsToKey(x, y);
-    const heightLevel = this.map.heightLayerMap[key];
+    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
+    const heightLevel = this.map.heightLayerMap.get(posIndex);
     let dropoff = 0;
     for (let i = 0; i < adjacent.length; i++) {
       const adjacentHeightLayer = adjacent[i];
@@ -491,42 +496,58 @@ export class MapShadows {
       }
     }
     dropoff = Math.round(dropoff * 1000) / 1000;
-    this.dropoffMaps["topdown"][1][key] = dropoff;
+    this.topdownDropoffMap.get(1).set(posIndex, dropoff);
 
     return dropoff;
   }
 
-  private getShadowFor(
-    x: number,
-    y: number,
-    dir: "sunup" | "sundown" | "topdown"
-  ): number {
-    const key = MapWorld.coordsToKey(x, y);
-    // topdown has only 1 shadowLength
-    const map =
-      this.dropoffMaps[dir][dir === "topdown" ? "1" : this.shadowLength];
+  private getCastShadowFor(x: number, y: number, dir: SunDirection): number {
+    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
+    // if dir is topdown (sun overhead), use the topdown shadow map, aka shadowLength of 1
+    let map;
+    switch (dir) {
+      case SunDirection.Sunup:
+        map = this.sunupDropoffMap.get(this.shadowLength);
+        break;
+      case SunDirection.Sundown:
+        map = this.sundownDropoffMap.get(this.shadowLength);
+        break;
+      case SunDirection.Topdown:
+        map = this.topdownDropoffMap.get(1);
+        break;
+    }
     if (!map) {
-      console.log("no map", this.shadowLength, dir, key);
+      console.log("no map", this.shadowLength, dir, x, y, posIndex);
       return 0;
     }
     // if there is no dropoff, this tile gets full sun
-    const sunlight = map[key] || this.ambientLightStrength;
+    const sunlight = map.get(posIndex) || this.ambientLightStrength;
 
     return sunlight;
   }
 
-  setShadow(x: number, y: number, sunlightAmount: number): void {
-    this.shadowMap[MapWorld.coordsToKey(x, y)] = sunlightAmount;
+  get(x: number, y: number): number {
+    return this.shadowMap[positionToIndex(x, y, Layer.TERRAIN)];
   }
 
-  public onEnter(positions: Point[]): void {
+  set(x: number, y: number, sunlightAmount: number): void {
+    this.shadowMap[positionToIndex(x, y, Layer.TERRAIN)] = sunlightAmount;
+  }
+
+  public onEnter(indexes: number[]): void {
+    if (!GameSettings.options.toggles.enableShadows) {
+      return;
+    }
+    // occlusion maps are static, so just update it on enter
+    this.updateOcclusionShadowMap(indexes);
     // immediately update the shadow map when a tile enters the viewport
     const dir = this.getShadowDir();
-    positions.forEach((pos) => {
-      const key = MapWorld.coordsToKey(pos.x, pos.y);
-      const lvl = this.getShadowFor(pos.x, pos.y, dir);
-      this.targetShadowMap[key] = lvl;
-      this.shadowMap[key] = lvl;
-    });
+    let xy: [number, number];
+    for (let index of indexes) {
+      xy = indexToXY(index, Layer.TERRAIN);
+      const lvl = this.getCastShadowFor(xy[0], xy[1], dir);
+      this.targetShadowMap[index] = lvl;
+      this.shadowMap[index] = lvl;
+    }
   }
 }

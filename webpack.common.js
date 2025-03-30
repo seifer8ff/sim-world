@@ -2,6 +2,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const FileManagerPlugin = require('filemanager-webpack-plugin');
 const path = require('path');
+const webpack = require('webpack');
 
 module.exports = {
     entry: './src/app.ts',
@@ -43,7 +44,10 @@ module.exports = {
         ]
     },
     resolve: {
-        extensions: ['.ts', '.tsx', '.js']
+        extensions: ['.ts', '.tsx', '.js'],
+        fallback: {
+            buffer: require.resolve('buffer/')
+        }
     },
     output: {
         filename: 'app.js',
@@ -66,6 +70,7 @@ module.exports = {
             <body>
                 <div id="uiContainer">
                     <sky-mask></sky-mask>
+                    <title-menu></title-menu>
                     <time-control></time-control>
                     <side-menu></side-menu>
                     <tile-info></tile-info>
@@ -85,5 +90,8 @@ module.exports = {
                 patterns: [
                     { from: "./public", to: "public" }]
             }
-        )]
+        ),
+        new webpack.ProvidePlugin({
+            Buffer: ['buffer', 'Buffer'],
+        })]
 };

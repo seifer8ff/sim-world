@@ -1,15 +1,4 @@
-import { BiomeId, Biomes } from "./biomes";
-import { DescriptionBlock } from "./entities/actor";
-import PinIcon from "./shoelace/assets/icons/pin-map.svg";
-import TextIcon from "./shoelace/assets/icons/card-text.svg";
-import TempIcon from "./shoelace/assets/icons/thermometer-half.svg";
-import MoistureIcon from "./shoelace/assets/icons/droplet.svg";
-import SunIcon from "./shoelace/assets/icons/brightness-high.svg";
-import MagnetIcon from "./shoelace/assets/icons/magnet.svg";
-import HeightIcon from "./shoelace/assets/icons/arrow-up-short.svg";
-import { PointerTarget } from "./camera";
-import { AnimatedSprite, Assets, Graphics, Sprite } from "pixi.js";
-import { update } from "lodash";
+import { BiomeId } from "./biomes";
 import { Point } from "./point";
 import { Layer } from "./renderer";
 
@@ -22,9 +11,12 @@ export const enum TileType {
 }
 
 // combined enum of specific types of TileTypes
+// can be used for pathing, z index, etc
 export enum TileSubType {
   Human = "Human",
-  Animal = "Animal",
+  Animal = "Animal", // land dweller
+  Fish = "Fish", // water dweller
+  Bird = "Bird", // air dweller
   Shrub = "Shrub",
   Tree = "Tree",
 }
@@ -40,9 +32,12 @@ export interface Tileset {
 }
 
 export class Tile {
+  private static currentId = 0;
+
   static readonly size = 32;
-  static readonly plantSize = 8;
+  static readonly denseSize = 8;
   static readonly terrainTilePixelSize = 16; // actual pixel size of each terrain tile on disk
+  static readonly tileDensityRatio = Tile.size / Tile.denseSize;
   static readonly player = new Tile(
     TileType.Player,
     "human_00",
@@ -55,7 +50,7 @@ export class Tile {
     "human_00",
     "#E7E6AC"
   );
-  static readonly animal = new Tile(
+  static readonly mushroom = new Tile(
     TileType.Entity,
     "sprites/mushroom_00/mushroom_00.json",
     "idle_000",
@@ -97,7 +92,9 @@ export class Tile {
   );
 
   static Tilesets: Tileset = {};
+  static tiles: Tile[] = []; // all tiles, indexed by their unique id
   // sprite: Sprite | AnimatedSprite | Graphics;
+  public readonly id: number;
 
   constructor(
     public readonly type: TileType,
@@ -108,6 +105,7 @@ export class Tile {
     // public readonly animated: boolean = false,
     public readonly biomeId?: BiomeId
   ) {
+    this.id = Tile.currentId++;
     // if (animated) {
     //   const animations = Assets.cache.get(this.spritePath).data.frames;
     //   const animKeys = Object.keys(animations).sort();
@@ -124,15 +122,18 @@ export class Tile {
   public static translatePoint(position: Point, from: Layer, to: Layer): Point {
     if (from === to) return position;
 
-    const ratio = Tile.size / Tile.plantSize;
-    if (from === Layer.PLANT) {
+    if (from === Layer.PLANT || from === Layer.TREE) {
       return new Point(
-        Math.floor(position.x / ratio),
-        Math.floor(position.y / ratio)
+        Math.floor(position.x / Tile.tileDensityRatio),
+        Math.floor(position.y / Tile.tileDensityRatio)
       );
-    } else if (to === Layer.PLANT) {
-      return new Point(position.x * ratio, position.y * ratio);
+    } else if (to === Layer.PLANT || to === Layer.TREE) {
+      return new Point(
+        position.x * Tile.tileDensityRatio,
+        position.y * Tile.tileDensityRatio
+      );
     }
+    return position;
   }
 
   // translate x or y position from one layer to another
@@ -143,60 +144,11 @@ export class Tile {
   ): number {
     if (from === to) return positionParameter;
 
-    const ratio = Tile.size / Tile.plantSize;
-    if (from === Layer.PLANT) {
-      return positionParameter / ratio;
-    } else if (to === Layer.PLANT) {
-      return positionParameter * ratio;
+    if (from === Layer.PLANT || from === Layer.TREE) {
+      return Math.floor(positionParameter / Tile.tileDensityRatio);
+    } else if (to === Layer.PLANT || to === Layer.TREE) {
+      return Math.floor(positionParameter * Tile.tileDensityRatio);
     }
-  }
-
-  public static getDescription(target: PointerTarget): DescriptionBlock[] {
-    const descriptionBlocks: DescriptionBlock[] = [];
-    if (!target) return descriptionBlocks;
-
-    descriptionBlocks.push({
-      icon: PinIcon,
-      getDescription: (pointerTarget: PointerTarget) =>
-        `${pointerTarget.position.x}, ${target.position.y}`,
-    });
-    if (target?.info) {
-      descriptionBlocks.push({
-        icon: TextIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${pointerTarget?.info?.biome?.description || "Unknown Biome"}`,
-      });
-      descriptionBlocks.push({
-        icon: TempIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.temperaturePercent * 100)}°F`,
-      });
-      descriptionBlocks.push({
-        icon: HeightIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.height * 100)} height`,
-      });
-      descriptionBlocks.push({
-        icon: MoistureIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.moisture * 100)}% moisture`,
-      });
-      descriptionBlocks.push({
-        icon: MagnetIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.magnetism * 100)} magnetism`,
-      });
-      descriptionBlocks.push({
-        icon: SunIcon,
-        getDescription: (pointerTarget: PointerTarget) => {
-          // console.log("update sunlight", pointerTarget);
-          return `${
-            Math.round(pointerTarget?.info?.sunlight * 100) || "??"
-          }% light`;
-        },
-      });
-    }
-
-    return descriptionBlocks;
+    return Math.floor(positionParameter);
   }
 }

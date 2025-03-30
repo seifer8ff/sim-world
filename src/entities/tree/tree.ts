@@ -1,5 +1,4 @@
 import { Game } from "../../game";
-import { Actor, DescriptionBlock } from "../actor";
 import { Point } from "../../point";
 import { Tile, TileSubType, TileType } from "../../tile";
 import { Action } from "../../actions/action";
@@ -8,14 +7,23 @@ import TypeIcon from "../../shoelace/assets/icons/person-vcard.svg";
 import GoalIcon from "../../shoelace/assets/icons/geo-alt.svg";
 import ActionIcon from "../../shoelace/assets/icons/sign-turn-slight-right.svg";
 import PinIcon from "../../shoelace/assets/icons/pin-map.svg";
-import { Layer } from "../../renderer";
+import { Layer, Renderable } from "../../renderer";
 // import LSystem from "lindenmayer";
 import { ParticleContainer, Sprite, Texture } from "pixi.js";
 import { PointerTarget } from "../../camera";
 import { TreeSpecies } from "./tree-species";
-import { RNG } from "rot-js";
-import { generateId, getItemFromRange } from "../../misc-utility";
-import { last } from "lodash";
+import { Color, RNG } from "rot-js";
+import {
+  generateId,
+  getItemFromRange,
+  inverseLerp,
+  lerp,
+} from "../../misc-utility";
+import { GameSettings } from "../../game-settings";
+import { Color as ColorType } from "rot-js/lib/color";
+import { clamp } from "rot-js/lib/util";
+import { LightManager } from "../../light-manager";
+import { ActorBase } from "../actor";
 
 export interface Segment {
   position: Point;
@@ -26,6 +34,7 @@ export interface Segment {
   curve: number;
   length: number;
   width: number;
+  segmentOrder: number; // resets to 0 for each branch
   rendered?: boolean;
 }
 
@@ -34,7 +43,7 @@ export interface TreeBranch {
   growLeaves: boolean;
   doneExtending: boolean;
   doneBranching: boolean;
-  order: number;
+  branchOrder: number;
   branchCount: number;
 }
 
@@ -48,10 +57,11 @@ export interface TreeTrunk extends TreeBranch {
   trunkBase?: Sprite;
 }
 
-export class Tree implements Actor {
+export class Tree {
   id: number;
   name?: string;
   tile: Tile;
+  static subType: TileSubType = TileSubType.Tree;
   subType: TileSubType;
   type: TileType;
   goal: Action;
@@ -67,7 +77,7 @@ export class Tree implements Actor {
   private branchesPerSegment: number; // maximum number of branches per segment (based on chance)
   private leafSize: number; // current size of leaf;
   private leafAlpha: number; // current alpha of leaf
-  private branchOrder: number; // current order of branch
+  private branchOrder: number; // trunk = branchOrder 0, ascending
   private leavesPerBranch: number; // number of leaves per branch (used to calculate max number of leaves at any time)
 
   private branchChance: number;
@@ -78,6 +88,8 @@ export class Tree implements Actor {
   private curveDir: number;
   private treeTrunk: TreeTrunk;
   private treeBranches: TreeBranch[];
+  private treeSegmentCount: number; // total number of segments across all branches
+  private canopyDarkenAmount: number; // how much to darken the base of the tree
 
   private growLeaves: boolean = true;
 
@@ -89,19 +101,13 @@ export class Tree implements Actor {
     this.id = generateId();
     this.tile = Tile.tree;
     this.type = this.tile.type;
-    this.subType = TileSubType.Tree;
+    this.subType = Tree.subType;
     this.name = `${this.subType} - ${this.species.name}`;
     this.growLeaves = true;
-
-    const worldPoint = Tile.translatePoint(
-      this.position,
-      Layer.PLANT,
-      Layer.TERRAIN
-    );
     const screenPos = this.game.userInterface.camera.TileToScreenCoords(
-      worldPoint.x,
-      worldPoint.y,
-      Layer.TERRAIN
+      this.position.x,
+      this.position.y,
+      Layer.TREE
     );
     this.initTree(screenPos.x, screenPos.y);
     this.renderTree(1);
@@ -143,22 +149,24 @@ export class Tree implements Actor {
       this.species.maxBranchesPerSegmentRange
     );
     this.leavesPerBranch = this.getRandFrom(
-      this.species.leavesPerBranchMin,
-      this.species.leavesPerBranchRange
+      this.species.leavesPerSegmentMin,
+      this.species.leavesPerSegmentRange
     );
     this.leafAlpha = this.species.maxLeafAlpha;
     this.curve = 80 + RNG.getUniform() * 20; // close to 90 degrees from ground
     this.randomizeTrunkStyle();
+    this.branchOrder = 0;
+    this.canopyDarkenAmount = 0;
+    this.treeSegmentCount = 0;
     this.treeBranches = [];
     this.treeTrunk = {
       segments: [],
-      order: this.branchOrder,
+      branchOrder: this.branchOrder,
       growLeaves: false,
       doneExtending: false,
       doneBranching: false,
       branchCount: 0,
     };
-    this.branchOrder = 0;
 
     // generate first trunk segment
     // let width = this.trunkSegmentWidth;
@@ -179,15 +187,17 @@ export class Tree implements Actor {
       curve: this.curve,
       length: length,
       width: this.trunkSegmentWidth,
+      segmentOrder: 0,
     };
     this.treeTrunk.segments.push(firstTrunkSegment);
+    this.treeSegmentCount++;
     this.treeBranches.push(this.treeTrunk);
 
     this.curveDir = RNG.getUniform() > 0.5 ? 1 : -1; // reset curve dir
     this.curve +=
       RNG.getUniform() * this.species.branchCurveAngle * this.curveDir; // set new curve dir
     this.branchOrder++;
-    this.trunkSegmentWidth *= this.species.trunkWidthDegrade;
+    this.trunkSegmentWidth *= this.species.trunkSegmentWidthDegrade;
     if (this.trunkSegmentWidth < this.species.branchSegmentWidthMin)
       this.trunkSegmentWidth = this.species.branchSegmentWidthMin;
     if (length < this.species.branchSegmentHeightMin)
@@ -212,7 +222,7 @@ export class Tree implements Actor {
         this.treeTrunk.segments[this.treeTrunk.segments.length - 1];
       let width = lastSegment.width;
       let length = lastSegment.length;
-      width *= this.species.trunkWidthDegrade;
+      width *= this.species.trunkSegmentWidthDegrade;
       if (width < this.species.branchSegmentWidthMin)
         width = this.species.branchSegmentWidthMin;
       if (length < this.species.branchSegmentHeightMin)
@@ -230,8 +240,10 @@ export class Tree implements Actor {
         curve: this.curve,
         length: length,
         width: width,
+        segmentOrder: lastSegment.segmentOrder + 1,
       };
       this.treeTrunk.segments.push(newSegment);
+      this.treeSegmentCount++;
       if (this.treeTrunk.segments.length === trunkSegments) {
         this.treeTrunk.doneExtending = true;
       }
@@ -280,12 +292,13 @@ export class Tree implements Actor {
             curve: this.curve,
             length: length,
             width: width,
+            segmentOrder: 0,
           },
         ],
         growLeaves: false,
         doneExtending: false,
         doneBranching: false,
-        order: this.branchOrder,
+        branchOrder: this.branchOrder,
         branchCount: 0,
       };
       this.treeBranches.push(newBranch);
@@ -322,13 +335,14 @@ export class Tree implements Actor {
             curve: this.curve,
             length: length,
             width: width,
+            segmentOrder: lastSegment.segmentOrder + 1,
           };
           treeBranch.segments.push(newSegment);
+          this.treeSegmentCount++;
 
           if (treeBranch.segments.length >= this.species.branchSegmentCount) {
             treeBranch.doneExtending = true;
           }
-          this.branchOrder++;
           this.curveDir = RNG.getUniform() > 0.5 ? 1 : -1; // reset curve dir
           this.curve +=
             RNG.getUniform() * this.species.branchCurveAngle * this.curveDir; // set new curve dir
@@ -408,19 +422,25 @@ export class Tree implements Actor {
                 curve: this.curve,
                 length: length,
                 width: width,
+                segmentOrder: 0,
               },
             ],
             growLeaves: true,
             doneExtending: false,
             // stop some branches from branching to keep tree from getting too dense
             doneBranching,
-            order: this.branchOrder,
+            branchOrder: treeBranch.branchOrder + 1,
             branchCount: 0,
           };
           this.treeBranches.push(newBranch);
           treeBranch.branchCount++;
+          this.canopyDarkenAmount = lerp(
+            clamp(inverseLerp(this.treeSegmentCount, 10, 20), 0, 1),
+            0.01,
+            0.3
+          );
           this.branchOrder++;
-          this.branchChance += this.species.branchChanceGrow; // grow branch chance every time tree grows
+          this.branchChance += this.species.branchChanceDegrade; // grow branch chance every time tree grows
           this.curveDir = RNG.getUniform() > 0.5 ? 1 : -1; // reset curve dir
           this.curve +=
             RNG.getUniform() * this.species.branchCurveAngle * this.curveDir; // set new curve dir
@@ -441,16 +461,17 @@ export class Tree implements Actor {
     const ratio = attachSegment.width / trunkBaseIdealWidth;
     trunkBaseSprite.width *= ratio;
     trunkBaseSprite.height *= ratio;
-    trunkBaseSprite.tint = attachSprite.tint;
+    // trunkBaseSprite.tint = attachSprite.tint;
     trunkBaseSprite.anchor.set(0.5, 0.5);
     trunkBaseSprite.position.set(
       attachSprite.position.x,
       attachSprite.position.y + attachSprite.height / 2
     );
-    trunkBaseSprite.zIndex = -1;
+    trunkBaseSprite.zIndex = 100;
+    trunkBaseSprite["order"] = -1;
   }
 
-  private renderBranch(branch: TreeBranch, tint: string): boolean {
+  private renderBranch(branch: TreeBranch): boolean {
     let renderSuccess: boolean = false;
     let sprite: Sprite;
     let isTrunk = branch === this.treeTrunk;
@@ -472,16 +493,11 @@ export class Tree implements Actor {
       sprite.anchor.set(0.5);
       sprite.width = segment.width;
       sprite.height = segment.length * 1.2; // hide gaps between segments
+      sprite.position.set(segment.position.x, segment.position.y);
 
-      sprite.position.set(
-        segment.position.x - this.sprite.position.x,
-        segment.position.y - this.sprite.position.y
-      );
       sprite.angle = -segment.curve + 90;
-      if (tint) {
-        sprite.tint = tint;
-      }
-      sprite.zIndex = branch.order;
+      sprite.zIndex = branch.branchOrder;
+      sprite["order"] = branch.branchOrder + segment.segmentOrder / 10;
 
       if (this.growthStep === 0) {
         // add a sprite for where the trunk meets the ground
@@ -501,15 +517,10 @@ export class Tree implements Actor {
     const leafRot = RNG.getUniform() * 360;
     const terrainPoint = Tile.translatePoint(
       this.position,
-      Layer.PLANT,
+      Layer.TREE,
       Layer.TERRAIN
     );
-    let tint;
     let growSuccess: boolean = false;
-
-    if (this.game.options.enableGlobalLights) {
-      tint = this.game.renderer.getTintForPosition(terrainPoint);
-    }
 
     if (firstGrowth) {
       this.sprite = new ParticleContainer(1000, {
@@ -517,25 +528,25 @@ export class Tree implements Actor {
         position: true,
         rotation: true,
         scale: true,
-        tint: tint == undefined ? false : true,
+        tint: GameSettings.shouldTint(),
       });
     }
 
     for (let i = 0; i < growthSteps; i++) {
       if (this.treeBranches.length > 1) {
         // only start growing leaves once there are branches
-        this.renderLeaves(tint);
+        this.renderLeaves();
       }
 
       if (this.fullyGrown) {
         break;
       }
       // add trunk
-      growSuccess = this.renderBranch(this.treeTrunk, tint);
+      growSuccess = this.renderBranch(this.treeTrunk);
       if (!growSuccess) {
         // add branches to trunk
         for (let treeBranch of this.treeBranches) {
-          growSuccess = this.renderBranch(treeBranch, tint);
+          growSuccess = this.renderBranch(treeBranch);
           if (growSuccess) {
             break;
           }
@@ -564,12 +575,16 @@ export class Tree implements Actor {
 
   draw(): void {
     if (this.sprite) {
-      this.game.renderer.addToScene(this.position, Layer.PLANT, this.sprite);
+      this.game.renderer.addToScene(this.position, Layer.TREE, this.sprite);
     }
   }
 
   public plan(): void {
-    this.action = new GrowAction(this.game, this, this.position);
+    this.action = new GrowAction(
+      this.game,
+      this as unknown as ActorBase,
+      this.position
+    );
   }
 
   act(): Promise<any> {
@@ -599,7 +614,7 @@ export class Tree implements Actor {
     this.renderTree(growSteps);
   }
 
-  private renderLeaves(tint: string): void {
+  private renderLeaves(): void {
     if (this.growLeaves === false) {
       return;
     }
@@ -607,7 +622,7 @@ export class Tree implements Actor {
     const maxLeaves =
       this.leavesPerBranch *
       this.treeBranches.length *
-      this.species.leavesPerBranchDensity;
+      this.species.leafDensity;
 
     for (let i = 0; i < leafsPerGrowth; i++) {
       if (this.leafSprites.length >= maxLeaves) {
@@ -650,18 +665,13 @@ export class Tree implements Actor {
       );
       this.sprite.addChild(leafSprite);
       leafSprite.anchor.set(0.5);
-      leafSprite.position.set(
-        leafX - this.sprite.position.x,
-        leafY - this.sprite.position.y
-      );
-      if (tint) {
-        leafSprite.tint = tint;
-      }
+      leafSprite.position.set(leafX, leafY);
       leafSprite.rotation = leafRotation;
-      leafSprite.alpha = this.leafAlpha;
+      // leafSprite.alpha = this.leafAlpha;
       leafSprite.width = this.leafSize;
       leafSprite.height = this.leafSize;
-      leafSprite.zIndex = branch.order + 1;
+      leafSprite.zIndex = branch.branchOrder + 1;
+      // leafSprite["order"] = branch.branchOrder + segment.segmentOrder;
       this.leafSprites.push(leafSprite);
     }
   }
@@ -670,12 +680,11 @@ export class Tree implements Actor {
     const maxLeaves =
       this.treeBranches.length *
       this.leavesPerBranch *
-      this.species.leavesPerBranchDensity;
+      this.species.leafDensity;
     const timeScale = this.game.timeManager.timeScale;
     // fudged nextLeafCount calc, but doesn't really matter
     const nextLeafCount =
-      this.leafSprites.length +
-      this.leavesPerBranch * this.species.leavesPerBranchDensity;
+      this.leafSprites.length + this.leavesPerBranch * this.species.leafDensity;
     const deadLeafCount = 3;
     let newAlpha = 1;
     let newScale = 1;
@@ -709,29 +718,80 @@ export class Tree implements Actor {
     }
   }
 
-  public getDescription(): DescriptionBlock[] {
-    const descriptionBlocks: DescriptionBlock[] = [];
-    descriptionBlocks.push({
-      icon: PinIcon,
-      getDescription: (pointerTarget?: PointerTarget) =>
-        `${pointerTarget?.position.x}, ${pointerTarget?.position.y}`,
-    });
-    descriptionBlocks.push({
-      icon: TypeIcon,
-      getDescription: () => this.subType,
-    });
-    if (this.goal) {
-      descriptionBlocks.push({
-        icon: GoalIcon,
-        getDescription: () => this.goal.name,
-      });
+  // tint the tree based on light level.
+  // darken tree towards bottom, based on segment count
+  public tintSelf(): void {
+    let translatedX = Tile.translate(
+      this.position.x,
+      Layer.TREE,
+      Layer.TERRAIN
+    );
+    let translatedY = Tile.translate(
+      this.position.y,
+      Layer.TREE,
+      Layer.TERRAIN
+    );
+    let colorArray = this.game.map.lightManager.getLightFor(
+      translatedX,
+      translatedY,
+      false
+    );
+    let color: ColorType = colorArray;
+    if (color === undefined) {
+      // position is outside of viewport
+      return;
     }
-    if (this.action) {
-      descriptionBlocks.push({
-        icon: ActionIcon,
-        getDescription: () => this.action.name,
-      });
-    }
-    return descriptionBlocks;
+
+    this.sprite.children.forEach((child: Renderable) => {
+      const order: number = child["order"];
+      if (order !== undefined) {
+        // TODO: improve this logic
+        // Should instead be applied to all segments with a smooth gradient
+        // and ensure it darkens more at the base
+        const darkenAmount = clamp(
+          inverseLerp(
+            order, // calculated from branchOrder + segmentOrder / 10
+            1.4, // how far up the tree to darken
+            0
+          ),
+          0,
+          this.canopyDarkenAmount // how much to darken the base of the tree
+        );
+        color = Color.interpolate(
+          colorArray,
+          LightManager.lightDefaults.shadow,
+          darkenAmount
+        );
+      }
+      if (child["tint"] !== undefined) {
+        (child as any).tint = Color.toHex(color);
+      }
+    });
   }
+
+  // public getDescription(): DescriptionBlock[] {
+  //   const descriptionBlocks: DescriptionBlock[] = [];
+  //   descriptionBlocks.push({
+  //     icon: PinIcon,
+  //     getDescription: (pointerTarget?: PointerTarget) =>
+  //       `${pointerTarget?.position.x}, ${pointerTarget?.position.y}`,
+  //   });
+  //   descriptionBlocks.push({
+  //     icon: TypeIcon,
+  //     getDescription: () => this.subType,
+  //   });
+  //   if (this.goal) {
+  //     descriptionBlocks.push({
+  //       icon: GoalIcon,
+  //       getDescription: () => this.goal.name,
+  //     });
+  //   }
+  //   if (this.action) {
+  //     descriptionBlocks.push({
+  //       icon: ActionIcon,
+  //       getDescription: () => this.action.name,
+  //     });
+  //   }
+  //   return descriptionBlocks;
+  // }
 }

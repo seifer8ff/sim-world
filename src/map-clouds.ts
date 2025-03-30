@@ -1,274 +1,153 @@
 import { Game } from "./game";
-import { getScaledNoise, lerp, normalizeNoise } from "./misc-utility";
+import { lerp } from "./misc-utility";
 import { MapWorld } from "./map-world";
-import { Point } from "./point";
-import { Biomes } from "./biomes";
-import Noise from "rot-js/lib/noise/noise";
-import { LightPhase } from "./map-shadows";
-import { RNG } from "rot-js";
+import { GameSettings } from "./game-settings";
+
+export enum MessageType {
+  INIT,
+  UPDATE,
+  ON_ENTER,
+  INTERPOLATE_STRENGTH,
+}
 
 export class MapClouds {
-  public windSpeed: Point; // vector of cloud speed and direction
-  public cloudMap: { [key: string]: number };
-  public targetCloudMap: { [key: string]: number };
+  public cloudMap: number[];
+  public targetCloudMap: number[];
   public cloudStrength: number;
   public sunbeamStrength: number;
-  public baseCloudNoise: number;
-  public baseWindSpeed: number;
   public cloudMinLevel: number; // threshold for when a cloud begins
   public sunbeamMaxLevel: number; // threshold for when a sunbeam ends
-  private cloudOffset: Point; // offset for cloud noise generator simulates cloud movement
+  private worker: Worker;
 
   constructor(private game: Game, private map: MapWorld) {
-    this.cloudMap = {};
-    this.targetCloudMap = {};
     this.cloudStrength = 1;
     this.sunbeamStrength = 0.7;
-    this.windSpeed = new Point(0.5, -0.2);
     this.cloudMinLevel = 0.75;
     this.sunbeamMaxLevel = 0.3;
-    this.baseWindSpeed = 0.5 / 100;
-    this.baseCloudNoise = 35;
-    this.cloudOffset = new Point(0, 0);
-
-    let key: string;
-    for (let i = 0; i < this.game.options.gameSize.width; i++) {
-      for (let j = 0; j < this.game.options.gameSize.height; j++) {
-        key = MapWorld.coordsToKey(i, j);
-        this.cloudMap[key] = 0;
-        this.targetCloudMap[key] = 0;
-      }
-    }
-  }
-
-  public generateCloudLevel(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    noise: Noise
-  ): number {
-    const key = MapWorld.coordsToKey(x, y);
-    const biome = this.map.biomeMap[key];
-    let noiseX = x / width - 0.5;
-    let noiseY = y / height - 0.5;
-
-    noiseX += this.cloudOffset.x;
-    noiseY += this.cloudOffset.y;
-
-    let cloudLevel = 0;
-    let cloudLevelNoise = 0;
-    let offset = 155; // any value works, just offsets the noise for other octaves
-
-    let cloudSize = 10;
-    let cloudIntensity = 0.33;
-
-    switch (biome?.id) {
-      case Biomes.Biomes.oceandeep.id:
-        cloudSize = 2;
-        cloudIntensity = 0.44;
-        break;
-      case Biomes.Biomes.ocean.id:
-        cloudSize = 4.5;
-        cloudIntensity = 0.42;
-        break;
-      case Biomes.Biomes.hillshigh.id:
-      case Biomes.Biomes.hillsmid.id:
-        cloudSize = 19;
-        cloudIntensity = 0.37;
-        break;
-      case Biomes.Biomes.hillslow.id:
-        cloudSize = 15;
-        cloudIntensity = 0.33;
-      case Biomes.Biomes.swamp.id:
-        cloudIntensity = 0.34;
-      default:
-        cloudSize = 12;
-        break;
-    }
-
-    // basic big smooth soft clouds and sunbeams
-    cloudLevelNoise =
-      cloudIntensity *
-      getScaledNoise(noise, cloudSize * noiseX, cloudSize * noiseY);
-    cloudLevel += cloudLevelNoise;
-
-    // medium clouds where there are no sunbeams
-    cloudLevelNoise =
-      (cloudIntensity + 0.12) *
-      getScaledNoise(
-        noise,
-        cloudSize + 10 * (noiseX + offset),
-        cloudSize + 10 * (noiseY + offset)
-      );
-
-    if (cloudLevel > this.sunbeamMaxLevel) {
-      cloudLevel += cloudLevelNoise;
-    }
-
-    cloudLevelNoise =
-      (cloudIntensity - 0.08) *
-      getScaledNoise(
-        noise,
-        cloudSize + 15 * (noiseX + offset),
-        cloudSize + 15 * (noiseY + offset)
-      );
-
-    if (cloudLevel > this.sunbeamMaxLevel) {
-      cloudLevel += cloudLevelNoise;
-    }
-
-    if (cloudLevel > 1) {
-      cloudLevel = 1;
-    } else if (cloudLevel < 0) {
-      cloudLevel = 0;
-    }
-    return cloudLevel;
-  }
-
-  public updateCloudOffset() {
-    this.cloudOffset.x += this.windSpeed.x * this.baseWindSpeed;
-    this.cloudOffset.y += this.windSpeed.y * this.baseWindSpeed;
-  }
-
-  public updateWindSpeed() {
-    // each frame, modify windspeed such that it changes direction gradually over time
-    const windSpeed = this.windSpeed;
-    const windSpeedMax = 0.7;
-    const windSpeedMin = -0.7;
-    const windSpeedChangeChance = 0.01;
-    const windSpeedChangeAmount = 0.05;
-    const windSpeedChangeDirection = 0.16;
-    const windSpeedChangeDirectionChance = 0.1;
-
-    if (RNG.getUniform() < windSpeedChangeChance) {
-      windSpeed.x +=
-        RNG.getUniform() < 0.5 ? windSpeedChangeAmount : -windSpeedChangeAmount;
-    }
-    if (RNG.getUniform() < windSpeedChangeChance) {
-      windSpeed.y +=
-        RNG.getUniform() < 0.5 ? windSpeedChangeAmount : -windSpeedChangeAmount;
-    }
-    if (RNG.getUniform() < windSpeedChangeDirectionChance) {
-      windSpeed.x +=
-        RNG.getUniform() < 0.5
-          ? windSpeedChangeDirection
-          : -windSpeedChangeDirection;
-    }
-    if (RNG.getUniform() < windSpeedChangeDirectionChance) {
-      windSpeed.y +=
-        RNG.getUniform() < 0.5
-          ? windSpeedChangeDirection
-          : -windSpeedChangeDirection;
-    }
-    windSpeed.x = Math.min(windSpeedMax, Math.max(windSpeedMin, windSpeed.x));
-    windSpeed.y = Math.min(windSpeedMax, Math.max(windSpeedMin, windSpeed.y));
-  }
-
-  public calcCloudsFor(pos: Point): number {
-    return this.generateCloudLevel(
-      pos.x,
-      pos.y,
-      this.game.options.gameSize.width,
-      this.game.options.gameSize.height,
-      this.game.noise
+    this.worker = new Worker(
+      new URL("./map-clouds-worker.ts", import.meta.url)
     );
+  }
+
+  public init() {
+    this.cloudMap = [];
+    this.targetCloudMap = [];
+    let type: MessageType;
+    let cloudMap: Map<number, number>;
+    this.worker.postMessage({
+      type: MessageType.INIT,
+      data: {
+        gameWidth: GameSettings.options.gameSize.width,
+        gameHeight: GameSettings.options.gameSize.height,
+        cloudStrength: this.cloudStrength,
+        sunbeamStrength: this.sunbeamStrength,
+        sunbeamMaxLevel: this.sunbeamMaxLevel,
+      },
+    });
+    this.worker.onmessage = (e) => {
+      if (e.data.type === MessageType.UPDATE) {
+        cloudMap = e.data.data.cloudMap;
+        this.cloudStrength = e.data.data.cloudStrength;
+        this.sunbeamStrength = e.data.data.sunbeamStrength;
+        for (let [tileIndex, cloudValue] of cloudMap.entries()) {
+          if (cloudValue === undefined) {
+            continue;
+          }
+          this.set(tileIndex, this.targetCloudMap[tileIndex]);
+        }
+        this.targetCloudMap.length = 0;
+        for (let [tileIndex, cloudValue] of cloudMap.entries()) {
+          if (cloudValue === undefined) {
+            continue;
+          }
+          this.targetCloudMap[tileIndex] = cloudValue;
+        }
+      }
+      if (e.data.type === MessageType.ON_ENTER) {
+        cloudMap = e.data.data;
+        for (let [tileIndex, cloudValue] of cloudMap.entries()) {
+          if (cloudValue === undefined) {
+            continue;
+          }
+          this.set(tileIndex, cloudValue);
+          this.targetCloudMap[tileIndex] = cloudValue;
+        }
+      }
+    };
   }
 
   // called each game turn
   public turnUpdate() {
-    this.updateWindSpeed();
-    this.updateCloudOffset();
-    const tileIDs = this.game.userInterface.camera.viewportTilesUnpadded;
-    for (let i = 0; i < tileIDs.length; i++) {
-      const key = tileIDs[i];
-      this.targetCloudMap[key] = this.calcCloudsFor(MapWorld.keyToPoint(key));
+    if (!GameSettings.options.toggles.enableClouds) {
+      return;
     }
-    // this.game.userInterface.camera.viewportTilesUnpadded.forEach((key) => {
-    //   this.targetCloudMap[key] = this.calcCloudsFor(MapWorld.keyToPoint(key));
-    // });
-    this.interpolateStrength();
+    const tiles = this.game.userInterface.camera.viewportTilesPadded;
+    const biomeIds = tiles.map((tileIndex) => this.map.biomeMap.get(tileIndex));
+    this.worker.postMessage({
+      type: MessageType.UPDATE,
+      data: {
+        tileIndexes: tiles,
+        biomeIds,
+      },
+    });
   }
 
   public renderUpdate(interPercent: number) {
-    this.interpolateCloudState();
-  }
-
-  private interpolateStrength() {
-    const lightTransitionPercent = this.game.timeManager.lightTransitionPercent;
-    const remainingCyclePercent = this.game.timeManager.remainingCyclePercent;
-    const phase = this.game.timeManager.lightPhase;
-
-    let remainingLightTransitionPercent;
-    let cloudStrength = this.cloudStrength;
-    let sunbeamStrength = this.sunbeamStrength;
-
-    if (phase === LightPhase.rising) {
-      remainingLightTransitionPercent =
-        (1 - remainingCyclePercent) / lightTransitionPercent;
-      cloudStrength = lerp(remainingLightTransitionPercent, 1, 0.95);
-      sunbeamStrength = lerp(
-        remainingLightTransitionPercent,
-        this.sunbeamMaxLevel,
-        1
-      ); // prevent sunbeams from flickering
-    } else if (phase === LightPhase.peak) {
-      // smoothly fade between 0 and 1 repeatedly, in a wave
-      // const wave = Math.sin(remainingCyclePercent * Math.PI);
-      // cloudStrength = lerp(wave, 0.95, 1);
-      // sunbeamStrength = lerp(wave, 1, this.sunbeamMaxLevel);
-    } else if (phase === LightPhase.setting) {
-      remainingLightTransitionPercent =
-        remainingCyclePercent / lightTransitionPercent;
-      cloudStrength = lerp(remainingLightTransitionPercent, 1, 0.95);
-      sunbeamStrength = lerp(
-        remainingLightTransitionPercent,
-        this.sunbeamMaxLevel,
-        1
-      );
+    if (!GameSettings.options.toggles.enableClouds) {
+      return;
     }
-    this.cloudStrength = Math.round(cloudStrength * 1000) / 1000;
-    this.sunbeamStrength = Math.round(sunbeamStrength * 1000) / 1000;
+    this.worker.postMessage({
+      type: MessageType.INTERPOLATE_STRENGTH,
+      data: {
+        lightTransitionPercent: this.game.timeManager.lightTransitionPercent,
+        remainingCyclePercent: this.game.timeManager.remainingCyclePercent,
+        lightPhase: this.game.timeManager.lightPhase,
+      },
+    });
+    this.interpolateCloudState(
+      this.game.userInterface.camera.viewportTilesUnpadded
+    );
   }
 
-  public interpolateCloudState() {
+  public interpolateCloudState(tileIndexes: number[]) {
+    if (!GameSettings.options.toggles.enableClouds) {
+      return;
+    }
     let val: number;
+    let posIndex: number;
     // only iterate through tiles in the viewport
-    const tileIDs = this.game.userInterface.camera.viewportTilesUnpadded;
-    for (let i = 0; i < tileIDs.length; i++) {
-      const key = tileIDs[i];
+    for (let i = 0; i < tileIndexes.length; i++) {
+      posIndex = tileIndexes[i];
       val = lerp(
         this.game.timeManager.turnAnimTimePercent,
-        this.cloudMap[key],
-        this.targetCloudMap[key]
+        this.get(posIndex),
+        this.targetCloudMap[posIndex]
       );
-      this.cloudMap[key] = val;
+      this.set(posIndex, val);
     }
-
-    // this.game.userInterface.camera.viewportTilesUnpadded.forEach((key) => {
-    //   val = lerp(
-    //     this.game.timeManager.turnAnimTimePercent,
-    //     this.cloudMap[key],
-    //     this.targetCloudMap[key]
-    //   );
-    //   this.cloudMap[key] = val;
-    // });
   }
 
-  setCloudLevel(x: number, y: number, cloudLevel: number): void {
-    this.cloudMap[MapWorld.coordsToKey(x, y)] = cloudLevel;
+  set(index: number, cloudLevel: number): void {
+    this.cloudMap[index] = cloudLevel;
   }
 
-  getCloudLevel(x: number, y: number): number {
-    return this.cloudMap[MapWorld.coordsToKey(x, y)];
+  get(index: number): number {
+    return this.cloudMap[index];
   }
 
-  onEnter(positions: Point[]): void {
-    positions.forEach((pos) => {
-      const key = MapWorld.coordsToKey(pos.x, pos.y);
-      const val = this.calcCloudsFor(pos);
-      this.cloudMap[key] = val;
-      this.targetCloudMap[key] = val;
+  onEnter(indexes: number[]): void {
+    if (!GameSettings.options.toggles.enableClouds) {
+      return;
+    }
+    if (indexes.length === 0) {
+      return;
+    }
+    this.worker.postMessage({
+      type: MessageType.ON_ENTER,
+      data: {
+        tileIndexes: indexes,
+        biomeIds: indexes.map((index) => this.map.biomeMap.get(index)),
+      },
     });
   }
 }

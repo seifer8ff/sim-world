@@ -1,11 +1,11 @@
 {
-  "name": "rotjs-typescript-basics",
-  "version": "1.0.0",
-  "description": "Using the rot.js library with TypeScript in a basic example.",
-  "main": "index.js",
+  "name": "sim-world",
+  "version": "0.0.1",
+  "description": "Colony Management in a living world.",
+  "main": "app.js",
   "scripts": {
     "build": "webpack --config webpack.prod.js",
-    "build:assets": "assetpack -c .assetpack/.assetpack.js",
+    "build:assets": "assetpack -c .assetpack.js",
     "watch": "webpack --watch --config webpack.dev.js",
     "serve": "http-server ./ --port=8085 -c-1",
     "serve:prod": "cd dist && http-server ./ --port=8085 -c-1",
@@ -13,15 +13,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Mizar999/rotjs-typescript-basics.git"
+    "url": "git+https://github.com/seifer8ff/sim-world.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Mizar999/rotjs-typescript-basics/issues"
-  },
-  "homepage": "https://github.com/Mizar999/rotjs-typescript-basics#readme",
+  "homepage": "https://github.com/seifer8ff/sim-world",
   "devDependencies": {
     "@assetpack/cli": "^0.8.0",
     "@assetpack/core": "^0.8.0",
@@ -49,15 +46,19 @@
     "webpack-merge": "^5.10.0"
   },
   "dependencies": {
-    "@pixi/tilemap": "^4.1.0",
     "@shoelace-style/shoelace": "^2.14.0",
+    "buffer": "^6.0.3",
     "console-extras": "github:unconed/console-extras.js",
     "gamestats.js": "^1.0.7",
     "lindenmayer": "^1.5.4",
     "lodash": "^4.17.21",
     "mainloop.js": "^1.0.4",
-    "pixi.js": "^7.4.0",
+    "miniplex": "^2.0.0",
+    "pixi.js": "7.4.0",
     "scheduler-polyfill": "^1.2.1",
     "tinygesture": "^3.0.0"
+  },
+  "localDependencies": {
+    "@pixi/tilemap": "../tilemap-with-tint"
   }
 }

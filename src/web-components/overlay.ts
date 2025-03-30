@@ -1,8 +1,10 @@
 import "@shoelace-style/shoelace/dist/components/icon-button/icon-button.js";
 import CloseIcon from "../shoelace/assets/icons/x.svg";
 import { SlIconButton } from "@shoelace-style/shoelace";
-import { Biome } from "../biomes";
-import { MapWorld } from "../map-world";
+import { Biome, BiomeId, Biomes } from "../biomes";
+import { MapWorld, ValueMap } from "../map-world";
+import { positionToIndex } from "../misc-utility";
+import { Layer } from "../renderer";
 
 export class Overlay extends HTMLElement {
   public container: HTMLDivElement;
@@ -80,7 +82,7 @@ export class Overlay extends HTMLElement {
     width: number,
     height: number,
     label: string = "Greyscale Overlay",
-    getData: () => { [key: string]: number }
+    getData: () => Map<number, number>
   ) {
     const overlay = this.generateOverlayContainer(label, width, height);
 
@@ -96,12 +98,13 @@ export class Overlay extends HTMLElement {
         }
         const imageData = ctx.createImageData(canvas.width, canvas.height);
         const data = imageData.data;
+        let index = -1;
 
         for (let i = 0; i < data.length; i += 4) {
           const x = (i / 4) % canvas.width;
           const y = Math.floor(i / 4 / canvas.width);
-          const key = `${x},${y}`;
-          const value = greyscaleMap[key] * 255;
+          index = positionToIndex(x, y, Layer.TERRAIN);
+          const value = greyscaleMap.get(index) * 255;
           data[i] = value;
           data[i + 1] = value;
           data[i + 2] = value;
@@ -123,7 +126,7 @@ export class Overlay extends HTMLElement {
       min: "red" | "green" | "blue";
       max: "red" | "green" | "blue";
     },
-    getData: () => { [key: string]: number }
+    getData: () => ValueMap
   ) {
     const overlay = this.generateOverlayContainer(label, width, height);
 
@@ -139,12 +142,14 @@ export class Overlay extends HTMLElement {
         }
         const imageData = ctx.createImageData(canvas.width, canvas.height);
         const data = imageData.data;
+        let index = -1;
+        let value = 0;
 
         for (let i = 0; i < data.length; i += 4) {
           const x = (i / 4) % canvas.width;
           const y = Math.floor(i / 4 / canvas.width);
-          const key = `${x},${y}`;
-          const value = greyscaleMap[key];
+          index = positionToIndex(x, y, Layer.TERRAIN);
+          value = greyscaleMap.get(index);
           let red = 0;
           let green = 0;
           let blue = 0;
@@ -184,7 +189,7 @@ export class Overlay extends HTMLElement {
     width: number,
     height: number,
     label: string = "Color Overlay",
-    getData: () => { [key: string]: Biome }
+    getData: () => Map<number, BiomeId>
   ) {
     // check if overlay already exists
     for (let overlay of this.overlays) {
@@ -206,13 +211,19 @@ export class Overlay extends HTMLElement {
         const imageData = ctx.createImageData(canvas.width, canvas.height);
         const data = imageData.data;
         const biomeMap = getData();
+        let x;
+        let y;
+        let index;
+        let biome;
+        let biomeId;
 
         // set the color of each pixel to biome.color
         for (let i = 0; i < data.length; i += 4) {
-          const x = (i / 4) % canvas.width;
-          const y = Math.floor(i / 4 / canvas.width);
-          const key = `${x},${y}`;
-          const biome = biomeMap[key];
+          x = (i / 4) % canvas.width;
+          y = Math.floor(i / 4 / canvas.width);
+          index = positionToIndex(x, y, Layer.TERRAIN);
+          biomeId = biomeMap.get(index);
+          biome = Biomes.Biomes[biomeId];
           if (biome) {
             const color = biome.color;
             data[i] = parseInt(color.substr(1, 2), 16);

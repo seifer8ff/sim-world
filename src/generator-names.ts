@@ -15,6 +15,12 @@ export class GeneratorNames {
     this.nameGenerators[TileSubType.Human] = new StringGenerator({
       words: true,
     });
+    this.nameGenerators[TileSubType.Fish] = new StringGenerator({
+      words: true,
+    });
+    this.nameGenerators[TileSubType.Bird] = new StringGenerator({
+      words: true,
+    });
     const exampleHumanNames = [
       "Brady",
       "Mario",
@@ -92,11 +98,60 @@ export class GeneratorNames {
       "Bootsie",
       "Bannana",
     ];
+    const exampleFishNames = [
+      "Bubbles",
+      "Goldie",
+      "Nemo",
+      "Dory",
+      "Gill",
+      "Marlin",
+      "Bruce",
+      "Anchor",
+      "Chum",
+      "Bloat",
+      "Jacques",
+      "Nigel",
+      "Crush",
+      "Squirt",
+      "Sheldon",
+      "Shelder",
+      "Tad",
+      "Pearl",
+      "Gurgle",
+    ];
+    const exampleBirdNames = [
+      "Polly",
+      "Pollyanna",
+      "Pollywog",
+      "Pollywanna",
+      "PollywannaCracker",
+      "Squawk",
+      "Squawker",
+      "Squawky",
+      "Squawkee",
+      "Squawko",
+      "Flip",
+      "Wing",
+      "Boeing",
+      "Falco",
+      "Eagle",
+      "Hawk",
+      "Eggy",
+      "Eggo",
+      "Eggbert",
+      "Eggie",
+    ];
     exampleHumanNames.forEach((name) =>
       this.nameGenerators[TileSubType.Human].observe(name)
     );
     exampleAnimalNames.forEach((name) =>
       this.nameGenerators[TileSubType.Animal].observe(name)
+    );
+    exampleFishNames.forEach((name) =>
+      this.nameGenerators[TileSubType.Fish].observe(name)
+    );
+    exampleBirdNames.forEach((name) =>
+      this.nameGenerators[TileSubType.Bird].observe(name)
     );
   }
 

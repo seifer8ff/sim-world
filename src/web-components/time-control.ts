@@ -72,6 +72,7 @@ export class TimeControl extends HTMLElement {
     container.appendChild(this.utilityActions);
 
     shadow.appendChild(container);
+    this.setVisible(false);
   }
 
   public updateTime(timeForDisplay: string): void {

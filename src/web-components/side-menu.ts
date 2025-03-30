@@ -17,7 +17,7 @@ import PersonIcon from "../shoelace/assets/icons/person.svg";
 import HandleIcon from "../shoelace/assets/icons/grip-vertical.svg";
 import { SlIconButton } from "@shoelace-style/shoelace";
 import { CachedTexture } from "../assets";
-import { Actor } from "../entities/actor";
+import { ActorBase, WithID } from "../entities/actor";
 
 export interface MenuTab {
   name: TopLevelMenu;
@@ -60,7 +60,7 @@ export class SideMenu extends HTMLElement {
       { name: "Resources", icon: BackpackIcon, content: [] },
       { name: "Build", icon: WrenchIcon, content: [] },
     ];
-    this.isVisible = true;
+    this.isVisible = false;
 
     this.container = document.createElement("div");
     this.container.style.pointerEvents = "auto";
@@ -123,6 +123,7 @@ export class SideMenu extends HTMLElement {
     this.container.appendChild(this.midControls);
 
     shadow.appendChild(this.container);
+    this.setVisible(false, true);
   }
 
   public getTab(tabName: string): MenuTab {
@@ -242,7 +243,7 @@ export class SideMenu extends HTMLElement {
     this.buildTabContent();
   }
 
-  public setEntityTarget(target: Actor) {
+  public setActorTarget(target: ActorBase) {
     this.menuContent.setOptionSelected(target?.id);
   }
 }

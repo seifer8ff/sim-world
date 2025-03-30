@@ -1,16 +1,11 @@
 import { Game } from "./game";
-import { Point } from "./point";
-import { UserInterface } from "./user-interface";
 
 export class MessageLog {
   private lines: string[];
+  private maxLines: number;
 
-  constructor(
-    private userInterface: UserInterface,
-    private position: Point,
-    private maxWidth: number,
-    private maxLines: number
-  ) {
+  constructor(private game: Game) {
+    this.maxLines = 100;
     this.lines = [];
   }
 
@@ -26,18 +21,16 @@ export class MessageLog {
   }
 
   draw(): void {
-    let linePosition = new Point(this.position.x, this.position.y);
-    for (
-      let index = 0;
-      index < this.maxLines && index < this.lines.length;
-      ++index
-    ) {
-      this.userInterface.drawText(
-        linePosition,
-        this.lines[index],
-        this.maxWidth
-      );
-      ++linePosition.y;
-    }
+    // this.game.application.stage.removeChildren();
+    // const text = this.lines.join("\n");
+    // const message = new PIXI.Text(text, {
+    //   fontFamily: "Arial",
+    //   fontSize: 18,
+    //   fill: 0xffffff,
+    //   align: "left",
+    // });
+    // message.x = 10;
+    // message.y = 10;
+    // this.game.application.stage.addChild(message);
   }
 }

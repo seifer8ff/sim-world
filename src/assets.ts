@@ -3,6 +3,7 @@ import * as PIXI from "pixi.js";
 import { Tile, TileType, BaseTileKey } from "./tile";
 import { Season } from "./time-manager";
 import { Biome, BiomeId, Biomes } from "./biomes";
+import { TreeSpecies } from "./entities/tree/tree-species";
 
 export interface CachedTexture {
   url: string;
@@ -97,7 +98,9 @@ export async function InitAssets() {
   // Assets.backgroundLoadBundle(allBundles);
 
   await Assets.backgroundLoadBundle(allBundles);
+  processManualTiles();
   ProcessTilesetsIntoTiles();
+  TreeSpecies.processTreeSpecies();
 }
 
 export function initPixiOptions(): void {
@@ -105,6 +108,24 @@ export function initPixiOptions(): void {
   PIXI.BaseTexture.defaultOptions.anisotropicLevel = 0;
   PIXI.BaseTexture.defaultOptions.mipmap = PIXI.MIPMAP_MODES.ON;
   PIXI.BaseTexture.defaultOptions.wrapMode = PIXI.WRAP_MODES.CLAMP;
+}
+
+export function processManualTiles() {
+  // for each manually defined tile, add it to the Tile object
+  // this is for tiles that don't have a tileset
+  const manualTiles = [
+    Tile.mushroom,
+    Tile.person,
+    Tile.player,
+    Tile.shrub,
+    Tile.tree,
+    Tile.cow,
+    Tile.seagull,
+    Tile.sharkBlue,
+  ];
+  manualTiles.forEach((tile) => {
+    Tile.tiles[tile.id] = tile;
+  });
 }
 
 export function ProcessTilesetsIntoTiles() {
@@ -187,6 +208,7 @@ function addTileToTileset(
     // add the generated tile to the tileset object
     Tile.Tilesets[tilesetMeta.id][season][tileIndex] = tile;
   }
+  Tile.tiles[tile.id] = tile;
 }
 
 // function addBaseTileToTileset(tilesetMeta: Biome, tile: Tile) {

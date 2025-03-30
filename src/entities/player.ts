@@ -1,6 +1,5 @@
 import { KEYS, DIRS, Path, RNG } from "rot-js";
 import { Game } from "../game";
-import { Actor, DescriptionBlock } from "./actor";
 import { Point } from "../point";
 import { InputUtility } from "../input-utility";
 import { Tile, TileSubType, TileType } from "../tile";
@@ -13,8 +12,9 @@ import { Sprite, AnimatedSprite, Graphics, Assets } from "pixi.js";
 import { PointerTarget } from "../camera";
 import { generateId } from "../misc-utility";
 import { Renderable } from "../renderer";
+import { GameSettings } from "../game-settings";
 
-export class Player implements Actor {
+export class Player {
   id: number;
   tile: Tile;
   type: TileType;
@@ -35,7 +35,7 @@ export class Player implements Actor {
       const animKeys = Object.keys(animations).sort();
       this.sprite = AnimatedSprite.fromFrames(animKeys);
       (this.sprite as AnimatedSprite).animationSpeed =
-        this.game.options.animationSpeed * this.game.timeManager.timeScale;
+        GameSettings.options.animationSpeed * this.game.timeManager.timeScale;
       (this.sprite as AnimatedSprite).loop = true;
       (this.sprite as AnimatedSprite).play();
     } else {
@@ -58,7 +58,7 @@ export class Player implements Actor {
   }
 
   public plan(): void {
-    this.action = new WaitAction(this.game, this, this.position);
+    // this.action = new WaitAction(this.game, this, this.position);
   }
 
   // act(): Promise<any> {
@@ -96,7 +96,7 @@ export class Player implements Actor {
         this.position.x + diff[0],
         this.position.y + diff[1]
       );
-      if (!this.game.isMapBlocked(newPoint.x, newPoint.y)) {
+      if (!this.game.collisionManager.isMapBlocked(newPoint.x, newPoint.y)) {
         return;
       }
       this.position = newPoint;
@@ -111,24 +111,24 @@ export class Player implements Actor {
     return validInput;
   }
 
-  public getDescription(): DescriptionBlock[] {
-    const descriptionBlocks: DescriptionBlock[] = [];
-    descriptionBlocks.push({
-      icon: TypeIcon,
-      getDescription: () => "Player",
-    });
-    if (this.goal) {
-      descriptionBlocks.push({
-        icon: GoalIcon,
-        getDescription: () => this.goal.name,
-      });
-    }
-    if (this.action) {
-      descriptionBlocks.push({
-        icon: ActionIcon,
-        getDescription: () => this.action.name,
-      });
-    }
-    return descriptionBlocks;
-  }
+  // public getDescription(): DescriptionBlock[] {
+  //   const descriptionBlocks: DescriptionBlock[] = [];
+  //   descriptionBlocks.push({
+  //     icon: TypeIcon,
+  //     getDescription: () => "Player",
+  //   });
+  //   if (this.goal) {
+  //     descriptionBlocks.push({
+  //       icon: GoalIcon,
+  //       getDescription: () => this.goal.name,
+  //     });
+  //   }
+  //   if (this.action) {
+  //     descriptionBlocks.push({
+  //       icon: ActionIcon,
+  //       getDescription: () => this.action.name,
+  //     });
+  //   }
+  //   return descriptionBlocks;
+  // }
 }

@@ -26,7 +26,7 @@ export interface PlantSpecies {
 }
 
 export interface TreeSpeciesDef {
-  id: string;
+  id: TreeSpeciesID;
   name: string;
   iconPath: string;
   textureSet: {
@@ -43,10 +43,11 @@ export interface TreeSpeciesDef {
   trunkSegmentWidthMin?: number;
   trunkSegmentWidthRange?: number;
   trunkSegmentWidthDegrade?: number;
+  trunkMaxBranches?: number;
   maxBranchesPerSegment?: number;
   maxBranchesPerSegmentRange?: number;
   branchChance?: number;
-  branchChanceGrow?: number;
+  branchChanceDegrade?: number;
 
   branchSegmentWidthMin?: number;
   branchSegmentWidthRange?: number;
@@ -57,13 +58,12 @@ export interface TreeSpeciesDef {
   branchCurveAngle?: number;
   branchForkMin?: number;
   branchForkRange?: number;
-  minTrunkBaseSize?: number;
-  leavesPerBranchMin?: number;
+  leavesPerSegmentMin?: number;
   maxLeafCount?: number;
-  leavesPerBranchRange?: number;
+  leavesPerSegmentRange?: number;
   leafMinSize?: number;
   leafSizeRange?: number;
-  leavesPerBranchDensity?: number;
+  leafDensity?: number;
   leafDistance?: number;
 
   minLeafAlpha?: number;
@@ -90,11 +90,20 @@ export interface PlantGrowthOptions {
   };
 }
 
+export type TreeSpeciesID = "pine" | "birch" | "maple" | "cottoncandy";
+
+export enum TreeSpeciesEnum {
+  PINE = "pine",
+  BIRCH = "birch",
+  MAPLE = "maple",
+  COTTONCANDY = "cottoncandy",
+}
+
 export class TreeSpecies {
   static treeSpecies: {
-    [id: string]: TreeSpecies;
+    [key in TreeSpeciesID as string]: TreeSpecies;
   } = {};
-  public id: string;
+  public id: TreeSpeciesID;
   public name: string;
   public iconPath: string;
   public textureSet: TreeTextureSet;
@@ -123,11 +132,12 @@ export class TreeSpecies {
   public trunkSegmentHeightRange: number;
   public trunkSegmentWidthMin: number;
   public trunkSegmentWidthRange: number;
-  public trunkWidthDegrade: number;
+  public trunkSegmentWidthDegrade: number;
+  public trunkMaxBranches: number;
   public maxBranchesPerSegment: number;
   public maxBranchesPerSegmentRange: number;
   public branchChance: number;
-  public branchChanceGrow: number;
+  public branchChanceDegrade: number;
   public branchSegmentWidthMin: number;
   public branchSegmentWidthRange: number;
   public branchSegmentWidthDegrade: number;
@@ -137,10 +147,9 @@ export class TreeSpecies {
   public branchCurveAngle: number;
   public branchForkMin: number;
   public branchForkRange: number;
-  public minTrunkBaseSize: number;
-  public leavesPerBranchMin: number;
-  public leavesPerBranchRange: number;
-  public leavesPerBranchDensity: number;
+  public leavesPerSegmentMin: number;
+  public leavesPerSegmentRange: number;
+  public leafDensity: number;
   public leafDistance: number;
   public leafMinSize: number;
   public leafSizeRange: number;
@@ -168,15 +177,17 @@ export class TreeSpecies {
     this.trunkSegmentWidthMin =
       options.trunkSegmentWidthMin !== undefined
         ? options.trunkSegmentWidthMin
-        : 6; // width of each trunk segment
+        : 2; // width of each trunk segment
     this.trunkSegmentWidthRange =
       options.trunkSegmentWidthRange !== undefined
         ? options.trunkSegmentWidthRange
         : 3; // random range added to trunk segment width
-    this.trunkWidthDegrade =
+    this.trunkSegmentWidthDegrade =
       options.trunkSegmentWidthDegrade !== undefined
         ? options.trunkSegmentWidthDegrade
         : 0.93; // degradation factor for trunk width
+    this.trunkMaxBranches =
+      options.trunkMaxBranches !== undefined ? options.trunkMaxBranches : 2; // maximum number of branches the trunk can split into
     this.maxBranchesPerSegment =
       options.maxBranchesPerSegment !== undefined
         ? options.maxBranchesPerSegment
@@ -187,8 +198,10 @@ export class TreeSpecies {
         : 2; // random range added to maxBranchesPerSegment
     this.branchChance =
       options.branchChance !== undefined ? options.branchChance : 1; // starting chance of branching
-    this.branchChanceGrow =
-      options.branchChanceGrow !== undefined ? options.branchChanceGrow : -0.1; // how much the chance of branching increases per segment
+    this.branchChanceDegrade =
+      options.branchChanceDegrade !== undefined
+        ? options.branchChanceDegrade
+        : 0.1; // how much the chance of branching decreases per branch
     this.branchSegmentWidthMin =
       options.branchSegmentWidthMin !== undefined
         ? options.branchSegmentWidthMin
@@ -219,26 +232,22 @@ export class TreeSpecies {
       options.branchForkMin !== undefined ? options.branchForkMin : 20; // minimum angle of branch from the parent branch
     this.branchForkRange =
       options.branchForkRange !== undefined ? options.branchForkRange : 30; // range of angle of branch
-    this.minTrunkBaseSize =
-      options.minTrunkBaseSize !== undefined ? options.minTrunkBaseSize : 2; // minimum number of segments without branches
     this.leafMinSize =
       options.leafMinSize !== undefined ? options.leafMinSize : 11; // minimum size of each leaf
     this.leafSizeRange =
       options.leafSizeRange !== undefined ? options.leafSizeRange : 8; // range of sizes for each leaf
-    this.leavesPerBranchDensity =
-      options.leavesPerBranchDensity !== undefined
-        ? options.leavesPerBranchDensity
-        : 1; // density of leaves on each branch/segment
+    this.leafDensity =
+      options.leafDensity !== undefined ? options.leafDensity : 1; // density of leaves on each branch/segment
     this.leafDistance =
       options.leafDistance !== undefined ? options.leafDistance : 3; // distance from the end of the branch where leaves are generated
-    this.leavesPerBranchMin =
-      options.leavesPerBranchMin !== undefined
-        ? options.leavesPerBranchMin
-        : 20; // minimum number of leaves per branch/branch end
-    this.leavesPerBranchRange =
-      options.leavesPerBranchRange !== undefined
-        ? options.leavesPerBranchRange
-        : 30; // random range added to leaf count
+    this.leavesPerSegmentMin =
+      options.leavesPerSegmentMin !== undefined
+        ? options.leavesPerSegmentMin
+        : 1; // minimum number of leaves per segment
+    this.leavesPerSegmentRange =
+      options.leavesPerSegmentRange !== undefined
+        ? options.leavesPerSegmentRange
+        : 2; // random range added to leaf count
     this.maxLeafAlpha =
       options.maxLeafAlpha !== undefined ? options.maxLeafAlpha : 1; // maximum opacity of leaves
     this.minLeafAlpha =
@@ -304,21 +313,27 @@ export class TreeSpecies {
             max: 100,
           },
         },
-        branchSegmentWidthDegrade: 0.96,
-        branchSegmentWidthMin: 1.2,
-        branchSegmentWidthRange: 3.5,
-
-        // minTrunkBaseSize: 3,
-        // branchSegmentHeightMin: 4,
-        // branchSegmentHeightRange: 8,
-        // branchSegmentHeightDegrade: 0.95,
+        trunkSegmentCount: 5,
+        trunkSegmentWidthMin: 6,
+        trunkSegmentWidthRange: 3,
+        trunkSegmentWidthDegrade: 0.88,
+        trunkSegmentHeightRange: 0,
+        trunkMaxBranches: 3,
+        branchSegmentCount: 6,
+        branchSegmentWidthDegrade: 0.79,
+        branchSegmentWidthMin: 0.9,
+        branchSegmentWidthRange: 2.3,
+        branchSegmentHeightMin: 3,
+        branchSegmentHeightRange: 3,
+        branchSegmentHeightDegrade: 0.98,
         branchChance: 1,
-        branchChanceGrow: -0.6,
+        branchChanceDegrade: 0.15,
         maxBranchesPerSegment: 2,
-        maxBranchesPerSegmentRange: 1,
-        branchCurveAngle: 3,
-        branchForkMin: 23,
-        branchForkRange: 20,
+        maxBranchesPerSegmentRange: 2,
+        branchCurveAngle: 4,
+        branchForkMin: 12,
+        branchForkRange: 30,
+        leafDensity: 1.3,
       },
       {
         id: "birch",
@@ -348,31 +363,32 @@ export class TreeSpecies {
             max: 100,
           },
         },
-        trunkSegmentCount: 5,
+        trunkSegmentCount: 4,
         trunkSegmentHeightMin: 5,
         trunkSegmentHeightRange: 3,
         trunkSegmentWidthMin: 4,
         trunkSegmentWidthRange: 3,
         trunkSegmentWidthDegrade: 0.98,
+        trunkMaxBranches: 1,
 
-        minTrunkBaseSize: 3,
+        branchSegmentCount: 8,
         branchSegmentHeightMin: 4,
-        branchSegmentHeightRange: 8,
-        branchSegmentHeightDegrade: 0.95,
+        branchSegmentHeightRange: 4,
+        branchSegmentHeightDegrade: 0.9,
         branchSegmentWidthDegrade: 0.9,
-        branchSegmentWidthMin: 0.81,
-        branchSegmentWidthRange: 0,
-        branchChance: 0.8,
-        branchChanceGrow: -0.33,
+        branchSegmentWidthMin: 0.8,
+        branchSegmentWidthRange: 0.4,
+        branchChance: 1,
+        branchChanceDegrade: 0.27,
         maxBranchesPerSegment: 2,
         maxBranchesPerSegmentRange: 1,
         branchCurveAngle: 5,
         branchForkMin: 10,
-        branchForkRange: 7,
-        leafDistance: 1.8,
-        leavesPerBranchMin: 25,
-        leavesPerBranchRange: 10,
-        leavesPerBranchDensity: 1.3,
+        branchForkRange: 5,
+        leafDistance: 2.3,
+        // leavesPerSegmentMin: 6,
+        // leavesPerSegmentRange: 3,
+        // leafDensity: 1.3,
         leafSizeRange: 6,
         leafMinSize: 8,
       },

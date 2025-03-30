@@ -6,13 +6,36 @@ A prototype of a colony management game, in which the environment (plants, clima
 
 After cloning the repository:
 
+- ensure you're using npm v18.20.7
+
 - Install necessary packages
 
   ```powershell
   npm ci
   ```
 
-- To build the assets, run:
+- You will need to manually install the shader code:
+  Clone the modified tilemap shader:
+  https://github.com/seifer8ff/tilemap-with-tint/tree/v4.x
+  After clone, switch to feat-tint branch and install dependencies:
+
+  ```powershell
+  cd tilemap-with-tint
+  git checkout feat-tint
+  npm ci
+  ```
+
+  Installing the depencencies also builds the project, readying it for install.
+
+  Navigate back to this repo and run:
+
+  ```powershell
+  npx install-local --save ../tilemap-with-tint
+  ```
+
+  This will install the local shader code into the project properly.
+
+- To build the assets, ensure you're using node v18.20.7 (can be managed easily using NVM) and then run:
 
   ```powershell
   npm run build:assets

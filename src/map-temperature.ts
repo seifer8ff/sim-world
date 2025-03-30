@@ -1,11 +1,11 @@
 import { Game } from "./game";
-import { Tile, TileType } from "./tile";
 import Simplex from "rot-js/lib/noise/simplex";
 import { LightManager } from "./light-manager";
-import { lerp, normalizeNoise } from "./misc-utility";
+import { lerp, normalizeNoise, positionToIndex } from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { Biomes } from "./biomes";
 import Noise from "rot-js/lib/noise/noise";
+import { Layer } from "./renderer";
 
 export enum Climates {
   Scorching = "Scorching",
@@ -45,14 +45,17 @@ export const TempMap = {
 
 export class MapTemperature {
   public lightManager: LightManager;
-  public tempMap: { [key: string]: number };
-  public terrainTileMap: { [key: string]: Tile };
+  public tempMap: Map<number, number>;
   public temperatureScale: number;
   private tempNoise: Simplex;
 
   constructor(private game: Game, private map: MapWorld) {
-    this.tempMap = {};
+    this.tempMap = new Map();
     this.temperatureScale = 1.5;
+  }
+
+  public init() {
+    this.tempMap = new Map();
   }
 
   public generateInitialTemp(
@@ -62,10 +65,10 @@ export class MapTemperature {
     height: number,
     noise: Noise
   ): number {
-    const key = MapWorld.coordsToKey(x, y);
-    const terrainHeight = this.map.heightMap[key];
+    const index = positionToIndex(x, y, Layer.TERRAIN);
+    const terrainHeight = this.map.heightMap.get(index);
     const terrainAboveSeaLevel = this.map.seaLevel - terrainHeight;
-    const magnetism = this.map.polesMap.magnetismMap[key];
+    const magnetism = this.map.polesMap.getMagnetism(x, y);
     let heightModifier = terrainHeight;
     // higher terrain is colder
     if (terrainHeight > Biomes.Biomes.hillsmid.generationOptions.height.min) {
@@ -96,25 +99,27 @@ export class MapTemperature {
     // reduce temp at high magnetism
     noiseValue -= magnetism;
     noiseValue = normalizeNoise(noiseValue * this.temperatureScale);
-    this.tempMap[key] = noiseValue;
-    return this.tempMap[key];
+    this.tempMap.set(index, noiseValue);
+    return this.tempMap.get(index);
   }
 
   setTemp(x: number, y: number, temp: number): void {
-    this.tempMap[MapWorld.coordsToKey(x, y)] = temp;
+    const index = positionToIndex(x, y, Layer.TERRAIN);
+    this.tempMap.set(index, temp);
   }
 
-  getTile(x: number, y: number): Tile {
-    return this.terrainTileMap[MapWorld.coordsToKey(x, y)];
+  getTemp(x: number, y: number): number {
+    const index = positionToIndex(x, y, Layer.TERRAIN);
+    return this.tempMap.get(index);
   }
 
-  getTileType(x: number, y: number): TileType {
-    return this.terrainTileMap[MapWorld.coordsToKey(x, y)].type;
+  getTempByIndex(index: number): number {
+    return this.tempMap.get(index);
   }
 
   getCurrentClimate(x: number, y: number): Climates {
-    const key = MapWorld.coordsToKey(x, y);
-    const temp = this.tempMap[key];
+    const index = positionToIndex(x, y, Layer.TERRAIN);
+    const temp = this.tempMap.get(index);
     for (let climate in TempMap) {
       const range = TempMap[climate];
       if (temp >= range.min && temp <= range.max) {

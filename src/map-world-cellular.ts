@@ -4,11 +4,11 @@ import { FOV } from "rot-js/lib/index";
 import { Game } from "./game";
 import { Tile, TileType } from "./tile";
 import { Point } from "./point";
-import { Actor } from "./entities/actor";
 import { Layer } from "./renderer";
 import { Autotile } from "./autotile";
 import { Season } from "./time-manager";
 import { Biome, BiomeId, Biomes } from "./biomes";
+import { ActorBase } from "./entities/actor";
 
 export class MapWorldCellular {
   private rawMap: { [key: string]: Biome };
@@ -41,24 +41,22 @@ export class MapWorldCellular {
   }
 
   autotileMap(rawMap: { [key: string]: Biome }) {
-    console.log("rawMap to start with: ", rawMap);
-    const autotileMap = Autotile.autotile(rawMap);
-    let tileIndex;
-    let biome: BiomeId;
-    let season: Season;
-    let tile: Tile;
-
-    Object.keys(autotileMap).forEach((pos) => {
-      tileIndex = autotileMap[pos];
-      biome = rawMap[pos].id;
-      season = this.game.timeManager.season;
-      tile = Tile.Tilesets[biome][season][tileIndex];
-
-      if (!tile) {
-        console.log(`AUTOTILE ERROR: ${biome} - ${season} - ${tileIndex}`);
-      }
-      this.map[pos] = tile;
-    });
+    // console.log("rawMap to start with: ", rawMap);
+    // const autotileMap = Autotile.autotile(rawMap);
+    // let tileIndex;
+    // let biome: BiomeId;
+    // let season: Season;
+    // let tile: Tile;
+    // Object.keys(autotileMap).forEach((pos) => {
+    //   tileIndex = autotileMap[pos];
+    //   biome = rawMap[pos].id;
+    //   season = this.game.timeManager.season;
+    //   tile = Tile.Tilesets[biome][season][tileIndex];
+    //   if (!tile) {
+    //     console.log(`AUTOTILE ERROR: ${biome} - ${season} - ${tileIndex}`);
+    //   }
+    //   this.map[pos] = tile;
+    // });
   }
 
   setTile(x: number, y: number, tile: Tile): void {
@@ -116,7 +114,7 @@ export class MapWorldCellular {
     }
   }
 
-  UpdateFOV(actor: Actor) {
+  UpdateFOV(actor: ActorBase) {
     const fov = new FOV.PreciseShadowcasting(this.lightPasses.bind(this));
     let bgTile;
     let key;

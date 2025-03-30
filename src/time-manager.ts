@@ -1,7 +1,8 @@
 import { Game } from "./game";
-import { Actor } from "./entities/actor";
 import Action from "rot-js/lib/scheduler/action";
 import { LightPhase } from "./map-shadows";
+import { GameSettings } from "./game-settings";
+import { ActorBase } from "./entities/actor";
 
 export enum Season {
   Spring = "spring",
@@ -58,7 +59,7 @@ export class TimeManager {
     this.lightPhase = LightPhase.rising;
     this.isNighttime = !this.isDayTime;
 
-    if (!this.game.options.dayStart) {
+    if (!GameSettings.options.toggles.dayStart) {
       const temp = this.scheduler.add(null, false, this.dayLength);
       for (let i = 0; i < this.dayLength; i++) {
         this.scheduler.next();
@@ -74,7 +75,7 @@ export class TimeManager {
   }
 
   public addToSchedule(
-    actor: Actor,
+    actor: ActorBase,
     repeat: boolean,
     initialTimeDelay?: number
   ): Action {
@@ -85,14 +86,14 @@ export class TimeManager {
     this.calculateTurnPercent(remainingAnimDelay);
   }
 
-  public nextOnSchedule(): Actor {
+  public nextOnSchedule(): ActorBase {
     this.calculateCurrentTime();
     return this.scheduler.next();
   }
 
   public calculateTurnPercent(remainingAnimDelay: number): void {
     if (!this.isPaused) {
-      const timeTotal = this.game.options.turnAnimDelay;
+      const timeTotal = GameSettings.options.turnAnimDelay;
       this.turnAnimTimePercent = (timeTotal - remainingAnimDelay) / timeTotal;
     }
 

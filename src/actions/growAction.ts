@@ -1,10 +1,9 @@
-import { Path } from "rot-js";
 import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
-import { Actor } from "../entities/actor";
 import { Tree } from "../entities/tree/tree";
 import { generateId } from "../misc-utility";
+import { ActorBase } from "../entities/actor";
 
 export class GrowAction implements Action {
   readonly id: number;
@@ -13,7 +12,7 @@ export class GrowAction implements Action {
 
   constructor(
     private game: Game,
-    private actor: Actor,
+    private actor: ActorBase,
     public targetPos: Point
   ) {
     this.id = generateId();

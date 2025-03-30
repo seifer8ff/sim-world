@@ -1,6 +1,3 @@
-import { RNG } from "rot-js/lib/index";
-import { Actor } from "./entities/actor";
-
 import { Game } from "./game";
 import { Layer } from "./renderer";
 import {
@@ -11,10 +8,11 @@ import {
   lerpEaseOut,
 } from "./misc-utility";
 import { Point } from "./point";
+import { ActorBase } from "./entities/actor";
 
 export interface Animation {
   id: number;
-  actor?: Actor; // UI lerps don't have actors
+  actor?: ActorBase; // UI lerps don't have actors
   tileKey: string;
   action: "move";
   turnDuration: number;
@@ -56,10 +54,7 @@ export class ManagerAnimation {
         }
         this.animations.pop();
       } else {
-        const runAnimationWithArgs = () => this.boundRunAnimation(anim);
-        this.game.scheduler.postTask(runAnimationWithArgs, {
-          priority: "user-visible",
-        });
+        this.runAnimation(anim);
       }
     }
   }
@@ -75,7 +70,7 @@ export class ManagerAnimation {
     oldPos: Point,
     newPos: Point,
     callback: () => void,
-    actor?: Actor
+    actor?: ActorBase
   ) {
     const animation: MoveAnimation = {
       id: generateId(),

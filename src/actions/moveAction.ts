@@ -1,10 +1,11 @@
 import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
-import { Actor } from "../entities/actor";
 import { Layer } from "../renderer";
 import { MapWorld } from "../map-world";
 import { generateId } from "../misc-utility";
+import { GameSettings } from "../game-settings";
+import { ActorBase } from "../entities/actor";
 
 export class MoveAction implements Action {
   readonly id: number;
@@ -13,7 +14,7 @@ export class MoveAction implements Action {
 
   constructor(
     private game: Game,
-    private actor: Actor,
+    private actor: ActorBase,
     public targetPos: Point
   ) {
     this.id = generateId();
@@ -30,7 +31,9 @@ export class MoveAction implements Action {
     );
     // get the direction of movement
     const movementVector = this.targetPos.movementVector(this.actor.position);
-    const shouldLerp = true;
+    const shouldLerp =
+      GameSettings.options.toggles.enableAnimations &&
+      (movementVector[0] !== 0 || movementVector[1] !== 0);
     if (oldPos) {
       // calculate the tile position of the movement vector
       // and get the screen position of that tile
@@ -48,6 +51,12 @@ export class MoveAction implements Action {
           oldPos,
           newPos,
           () => {
+            // clear the old position in the collision manager
+            this.game.collisionManager.clearEntityTile(
+              this.actor.position.x,
+              this.actor.position.y,
+              Layer.ENTITY
+            );
             // update the position of the sprite in the renderer's cache
             // keeps the renderer's representation of the map in sync with the game
             // otherwise, renderer will think sprite is still at old position
@@ -58,9 +67,31 @@ export class MoveAction implements Action {
             );
             // keep actor's position in sync with target position
             this.actor.position = new Point(this.targetPos.x, this.targetPos.y);
+            // update collision
+            this.game.collisionManager.occupyTile(
+              this.targetPos.x,
+              this.targetPos.y,
+              Layer.ENTITY,
+              this.actor.id
+            );
           },
           this.actor
         );
+      } else {
+        // update collision
+        this.game.collisionManager.clearEntityTile(
+          this.actor.position.x,
+          this.actor.position.y,
+          Layer.ENTITY
+        );
+        // if no lerp, just update the sprite cache position
+        this.game.renderer.updateSpriteCachePosition(
+          this.actor.position,
+          this.targetPos,
+          Layer.ENTITY
+        );
+        // keep actor's position in sync with target position
+        this.actor.position = new Point(this.targetPos.x, this.targetPos.y);
       }
     }
 

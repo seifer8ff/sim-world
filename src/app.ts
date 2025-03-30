@@ -21,6 +21,8 @@ declare global {
 // setBasePath("shoelace");
 
 document.body.onload = async () => {
+  // creating a new game instance creates the Application
+  // and the dom elements needed to hold the game
   var game = new Game();
   await game.Init();
   game.start();
