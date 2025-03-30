@@ -6,6 +6,8 @@ A prototype of a colony management game, in which the environment (plants, clima
 
 After cloning the repository:
 
+- ensure you're using npm v18.20.7
+
 - Install necessary packages
 
   ```powershell
