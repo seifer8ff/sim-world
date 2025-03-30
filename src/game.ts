@@ -1,6 +1,5 @@
 import { RNG } from "rot-js/lib/index";
 import { Player } from "./entities/player";
-import { Actor } from "./entities/actor";
 import { GameState, Stages } from "./game-state";
 import { Tile } from "./tile";
 import { UserInterface } from "./user-interface";
@@ -17,46 +16,33 @@ import * as MainLoop from "mainloop.js";
 
 import { InitAssets } from "./assets";
 import { GameSettings } from "./game-settings";
-import { ManagerActors } from "./manager-actors";
+import { ManagerActor } from "./manager-actors";
 import { positionToIndex } from "./misc-utility";
 import { Biomes } from "./biomes";
 import { TreeSpecies } from "./entities/tree/tree-species";
 import { SystemTreeRenderer } from "./system-tree-renderer";
 import { ManagerCollision } from "./manager-collision";
+import { ActorBase } from "./entities/actor";
+import { SystemAnimated } from "./system-animated";
+import { SystemPathfinder } from "./system-pathfinder";
 
 export class Game {
   public settings: GameSettings;
   public noise: Noise;
   public map: MapWorld;
-  public player: Player;
-  public plants: Actor[];
   public gameState: GameState;
   public renderer: Renderer;
   public animManager: ManagerAnimation;
-  public actorManager: ManagerActors;
+  public actorManager: ManagerActor;
   public collisionManager: ManagerCollision;
+  public pathfinder: SystemPathfinder;
   public timeManager: TimeManager;
   public userInterface: UserInterface;
   public nameGenerator: GeneratorNames;
-
-  public scheduler: {
-    postTask: (
-      task: any,
-      options: { priority: "user-blocking" | "background" | "user-visible" }
-    ) => void;
-  };
-
-  public ticker: Ticker;
-  private turnAnimDelay: number = 0; // how long to delay the game loop for (like when animations are playing)
+  private turnAnimDelayCounter: number = 0; // how long to delay the game loop for (like when animations are playing)
 
   constructor() {
     this.settings = new GameSettings(this);
-    if ((window as any).scheduler) {
-      this.scheduler = (window as any).scheduler;
-    }
-    this.ticker = Ticker.shared;
-    this.ticker.autoStart = false;
-    this.ticker.stop();
     if (GameSettings.options.gameSeed == undefined) {
       GameSettings.options.gameSeed = Math.floor(RNG.getUniform() * 1000000);
     }
@@ -71,8 +57,9 @@ export class Game {
     this.map = new MapWorld(this);
     this.nameGenerator = new GeneratorNames(this);
     this.renderer = new Renderer(this);
-    this.actorManager = new ManagerActors(this);
+    this.actorManager = new ManagerActor(this);
     this.collisionManager = new ManagerCollision(this);
+    this.pathfinder = new SystemPathfinder(this);
   }
 
   public async Init(): Promise<boolean> {
@@ -155,8 +142,6 @@ export class Game {
   }
 
   private mainLoop(deltaTime: number) {
-    this.ticker.update(performance.now());
-
     if (this.gameState.stage === Stages.Play) {
       if (!this.gameState.worldSetupComplete) {
         // let a few turns pass, do any world setup needed
@@ -165,16 +150,16 @@ export class Game {
       }
 
       // handle counting down wait time after a turn (like for animation)
-      if (this.turnAnimDelay > 0 && !this.timeManager.isPaused) {
-        this.turnAnimDelay -= deltaTime * this.timeManager.timeScale;
+      if (this.turnAnimDelayCounter > 0 && !this.timeManager.isPaused) {
+        this.turnAnimDelayCounter -= deltaTime * this.timeManager.timeScale;
       }
-      if (this.turnAnimDelay < 0) {
-        this.turnAnimDelay = 0;
+      if (this.turnAnimDelayCounter < 0) {
+        this.turnAnimDelayCounter = 0;
       }
 
-      if (!this.timeManager.isPaused && this.turnAnimDelay <= 0) {
+      if (!this.timeManager.isPaused && this.turnAnimDelayCounter <= 0) {
         this.gameLoop();
-        this.turnAnimDelay = GameSettings.options.turnAnimDelay;
+        this.turnAnimDelayCounter = GameSettings.options.turnAnimDelay;
         this.timeManager.resetTurnAnimTime();
       }
     }
@@ -187,7 +172,8 @@ export class Game {
     //   "----- game loop, turn: " + this.timeManager.currentTurn + " -------"
     // );
     const turn = this.timeManager.currentTurn;
-    let actors: Actor[] = [];
+    let actors: ActorBase[] = [];
+
     // loop through ALL actors each turn
     while (turn === this.timeManager.currentTurn) {
       actors.push(this.timeManager.nextOnSchedule());
@@ -195,26 +181,64 @@ export class Game {
 
     return Promise.all(
       actors.map((actor) => {
-        if (actor && actor?.plan) {
-          return actor?.plan();
+        if (actor && actor?.brain) {
+          return actor?.brain.plan();
         }
       })
     ).then(async () => {
       actors.forEach((actor) => {
-        if (actor?.action) {
-          this.timeManager.setDuration(actor.action.durationInTurns);
+        if (actor?.brain?.action) {
+          // console.log(`actor ${actor.name} is ${actor.action.name}`);
+          this.timeManager.setDuration(actor?.brain.action.durationInTurns);
         }
       });
 
       await Promise.all(
         actors.map((actor) => {
-          if (actor?.action) {
-            return actor?.act();
+          if (actor?.brain?.action) {
+            return actor?.brain?.act();
           }
         })
       );
 
-      // console.log("promises done");
+      // return Promise.all(
+      //   actors.map((actor) => {
+      //     if (actor && actor?.plan) {
+      //       return actor?.plan();
+      //     }
+      //   })
+      // ).then(async () => {
+      //   actors.forEach((actor) => {
+      //     if (actor?.action) {
+      //       // console.log(`actor ${actor.name} is ${actor.action.name}`);
+      //       this.timeManager.setDuration(actor.action.durationInTurns);
+      //     }
+      //   });
+
+      //   await Promise.all(
+      //     actors.map((actor) => {
+      //       if (actor?.action) {
+      //         return actor?.act();
+      //       }
+      //     })
+      //   );
+
+      // grow some of the shrubs
+      let maxGrowth = 55;
+      for (const shrub of this.actorManager.allShrubs) {
+        if (maxGrowth <= 0) {
+          break;
+        }
+        if (this.actorManager.shrubManager.growShrub(shrub)) {
+          maxGrowth--;
+        }
+      }
+
+      // grow all of the trees
+      for (const tree of this.actorManager.allTrees) {
+        this.actorManager.treeManager.growTree(tree);
+      }
+
       // clear cache for dynamic layers:
       // - terrain layer's cache is handled at lower level by marking tiles as dirty
       // - entity layer's cache is handled at lower level to allow lerp animations
@@ -233,14 +257,20 @@ export class Game {
       this.map.lightManager.recalculateDynamicLighting();
 
       // update cache for entities and plants
-      this.drawEntities();
-      this.drawPlants();
+      SystemAnimated.setAnimatorSpeed(
+        this.actorManager.withAnimator,
+        this.timeManager.timeScale
+      );
+      SystemAnimated.drawAnimated(
+        this.actorManager.withAnimator,
+        this.renderer
+      );
+      this.drawShrubs();
+      this.drawTrees();
       //
       // important that this comes last
       // run a tint pass on all actors (entities, trees, etc)
-      this.map.lightManager.tintActors(this.actorManager.actors, true);
-
-      this.drawTrees();
+      this.map.lightManager.tintActors(this.actorManager.withAnimator, true);
     });
   }
 
@@ -256,14 +286,14 @@ export class Game {
 
     this.renderer.clearSceneLayer(Layer.TREE);
 
-    for (const tree of this.actorManager.getTrees()) {
+    for (const tree of this.actorManager.allTrees) {
       let { x, y } = tree.position;
       x = Tile.translate(x, Layer.TREE, Layer.TERRAIN);
       y = Tile.translate(y, Layer.TREE, Layer.TERRAIN);
 
       // for now, grow all trees
       // later, implement turn-based growth
-      this.actorManager.treeManager.growTree(tree);
+      // this.actorManager.treeManager.growTree(tree);
       // Check if the tree is within the viewport boundaries
       if (
         x >= viewportLeft &&
@@ -276,24 +306,33 @@ export class Game {
     }
   }
 
-  private drawPlants(): void {
-    // for (let tree of this.actorManager.trees) {
-    //   tree.draw();
-    // }
-    // for (const { renderable, position } of this.actorManager.getTrees()) {
-    //   if (renderable) {
-    //     this.renderer.addToScene(position, Layer.TREE, renderable);
-    //   }
-    // }
-    for (const { tile, position } of this.actorManager.getShrubs()) {
-      this.renderer.addTileIdToScene(position, Layer.PLANT, tile);
-    }
-  }
+  private drawShrubs(): void {
+    const viewport = this.userInterface.camera.viewportPadded;
+    const halfWidth = viewport.width / 2;
+    const halfHeight = viewport.height / 2;
 
-  private drawEntities(): void {
-    // this.renderer.clearSceneLayer(Layer.ENTITY);
-    for (let actor of this.actorManager.actors) {
-      actor.draw();
+    const viewportLeft = viewport.center.x - halfWidth;
+    const viewportRight = viewport.center.x + halfWidth;
+    const viewportTop = viewport.center.y - halfHeight;
+    const viewportBottom = viewport.center.y + halfHeight;
+
+    // this.renderer.clearSceneLayer(Layer.PLANT);
+
+    for (const shrub of this.actorManager.allShrubs) {
+      // console.log("shrub", shrub);
+      let { x, y } = shrub.position;
+      x = Tile.translate(x, Layer.PLANT, Layer.TERRAIN);
+      y = Tile.translate(y, Layer.PLANT, Layer.TERRAIN);
+
+      // Check if the shrub is within the viewport boundaries
+      if (
+        x >= viewportLeft &&
+        x <= viewportRight &&
+        y >= viewportTop &&
+        y <= viewportBottom
+      ) {
+        this.actorManager.shrubManager.drawShrub(shrub);
+      }
     }
   }
 
@@ -308,7 +347,7 @@ export class Game {
     this.userInterface.camera.renderUpdate(interpPercent);
 
     if (this.gameState.stage === Stages.Play) {
-      this.timeManager.renderUpdate(this.turnAnimDelay);
+      this.timeManager.renderUpdate(this.turnAnimDelayCounter);
 
       if (GameSettings.options.toggles.enableShadows) {
         this.map.shadowMap.renderUpdate(interpPercent);

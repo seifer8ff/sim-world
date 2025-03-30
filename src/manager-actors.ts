@@ -1,48 +1,52 @@
 import { RNG } from "rot-js/lib/index";
-import { Actor } from "./entities/actor";
-
 import { Game } from "./game";
 import { Layer } from "./renderer";
 import { generateId } from "./misc-utility";
 import { Point } from "./point";
 import { GameSettings } from "./game-settings";
 import { BiomeId, Biomes } from "./biomes";
-import { Cow } from "./entities/cow";
+import { BrainFish } from "./brains/brain-fish";
+import { BrainAnimal } from "./brains/brain-animal";
+import { BrainMushroom } from "./brains/brain-mushroom";
+import { BrainBird } from "./brains/brain-bird";
 import { Tile, TileSubType, TileType } from "./tile";
-import { SharkBlue } from "./entities/shark-blue";
-import { Seagull } from "./entities/seagull";
-import { Mushroom } from "./entities/mushroom";
-import { Tree } from "./entities/tree/tree";
 import {
   TreeSpecies,
   TreeSpeciesEnum,
   TreeSpeciesID,
 } from "./entities/tree/tree-species";
-import { Shrub } from "./entities/shrub";
 import { Query, World } from "miniplex";
-import { ComponentType, EntityBase } from "./entities/entity";
-import { EntityBuilder } from "./entity-builder";
-import { Sprite } from "pixi.js";
+import {
+  ComponentType,
+  ActorBase,
+  WithPosition,
+  WithID,
+  WithAnimator,
+} from "./entities/actor";
 import { ManagerTrees } from "./manager-trees";
+import { ManagerShrubs } from "./manager-shrubs";
+import { Animator } from "./components/animator";
+import { Description } from "./components/description";
 
-export class ManagerActors {
-  public allActors: Actor[]; // all actors, including actor, trees, and anything else not tilemap based
-  public actors: Actor[];
+export class ManagerActor {
   private landBiomes: BiomeId[];
   private waterBiomes: BiomeId[];
   private airBiomes: BiomeId[];
-  private shrubBiomes: BiomeId[];
-  private world: World<EntityBase>;
+  private world: World<ActorBase>;
   public treeManager: ManagerTrees;
+  public shrubManager: ManagerShrubs;
 
   // queries
-  private allShrubs: Query<EntityBase>;
-  private allTrees: Query<EntityBase>;
-  private allColliders: Query<EntityBase>;
+  public allPositioned: Query<ActorBase>;
+  public allPlants: Query<ActorBase>;
+  public allShrubs: Query<ActorBase>;
+  public allTrees: Query<ActorBase>;
+  public withPosition: Query<ActorBase & WithPosition>;
+  public withCollider: Query<ActorBase>;
+  public withAnimator: Query<ActorBase & WithID & WithPosition & WithAnimator>;
+  public withBrain: Query<ActorBase>;
 
   constructor(private game: Game) {
-    this.allActors = [];
-    this.actors = [];
     this.landBiomes = [
       Biomes.Biomes.moistdirt.id,
       Biomes.Biomes.hillsmid.id,
@@ -53,17 +57,28 @@ export class ManagerActors {
     ];
     this.waterBiomes = [Biomes.Biomes.ocean.id, Biomes.Biomes.oceandeep.id];
     this.airBiomes = [...this.landBiomes, Biomes.Biomes.ocean.id];
-    this.shrubBiomes = [Biomes.Biomes.moistdirt.id];
-    this.world = new World<EntityBase>();
+    this.world = new World<ActorBase>();
+    this.withPosition = this.world.with(ComponentType.position);
+    this.allPositioned = this.world.with(ComponentType.position);
+    this.allPlants = this.world
+      .with(ComponentType.type)
+      .where(({ type }) => type === TileType.Plant);
     this.allShrubs = this.world
       .with(ComponentType.subType)
       .where(({ subType }) => subType === TileSubType.Shrub);
     this.allTrees = this.world
       .with(ComponentType.subType)
       .where(({ subType }) => subType === TileSubType.Tree);
-    this.allColliders = this.world
+    this.withCollider = this.world
       .with(ComponentType.position)
       .with(ComponentType.collider);
+    this.withAnimator = this.world
+      .with(ComponentType.id)
+      .with(ComponentType.position)
+      .with(ComponentType.animator)
+      .where((actor) => actor.animatedTile !== undefined);
+    this.withBrain = this.world.with(ComponentType.brain);
+    this.shrubManager = new ManagerShrubs(this.game, this.world);
     this.treeManager = new ManagerTrees(this.game, this.world);
   }
 
@@ -75,9 +90,9 @@ export class ManagerActors {
   getRandomActorPositions(subtype: TileSubType, quantity: number = 1): Point[] {
     let buffer: Point[] = [];
     let result: Point[] = [];
-    for (let actor of this.allActors) {
-      if (actor.subType === subtype) {
-        buffer.push(actor.position);
+    for (const { position, subType } of this.withPosition) {
+      if (subType === subtype) {
+        buffer.push(position);
       }
     }
 
@@ -95,7 +110,7 @@ export class ManagerActors {
   ): Point[] {
     let buffer: Point[] = [];
     let result: Point[] = [];
-    for (const { species, position } of this.getTrees()) {
+    for (const { species, position } of this.allTrees) {
       if (species === speciesId) {
         buffer.push(position);
       }
@@ -109,24 +124,117 @@ export class ManagerActors {
     return result;
   }
 
-  public getActorsAt(x: number, y: number): Actor[] {
-    return this.allActors.filter(
-      (actor) => actor.position.x === x && actor.position.y === y
-    );
+  public getActorsAt(x: number, y: number): ActorBase[] {
+    let result: ActorBase[] = [];
+    for (const actor of this.withPosition) {
+      if (actor.position?.x === x && actor.position.y === y) {
+        result.push(actor);
+      }
+    }
+    // console.log("result", result);
+    return result;
+  }
+
+  public getPlantsAt(x: number, y: number): ActorBase[] {
+    let result: ActorBase[] = [];
+    for (const actor of this.allPlants) {
+      if (actor.position?.x === x && actor.position.y === y) {
+        result.push(actor);
+      }
+    }
+    // console.log("result", result);
+    return result;
   }
 
   private addAnimals(): void {
+    let actor: Partial<ActorBase> & WithPosition & WithID;
     for (let i = 0; i < GameSettings.options.spawn.inputs.cowCount; i++) {
-      this.spawnActor(Cow);
+      // COW
+      // create an actor
+      // add components representing cow
+      actor = {
+        id: generateId(),
+        position: this.game.map.getRandomTilePositions(
+          this.landBiomes,
+          1,
+          true
+        )[0],
+        animatedTile: Tile.cow,
+        type: TileType.Entity,
+        subType: TileSubType.Animal,
+      };
+      actor.name = this.game.nameGenerator.generate(actor.subType);
+      actor.range = 10;
+      actor.path = [];
+      actor.animator = new Animator(this.game, actor as any, 0.3);
+      actor.brain = new BrainAnimal(this.game, actor as any);
+      actor.description = new Description(actor);
+      this.spawnActor(actor, Layer.ENTITY);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.sharkCount; i++) {
-      this.spawnActor(SharkBlue);
+      // SHARK
+      actor = {
+        id: generateId(),
+        position: this.game.map.getRandomTilePositions(
+          this.waterBiomes,
+          1,
+          true
+        )[0],
+        animatedTile: Tile.sharkBlue,
+        type: TileType.Entity,
+        subType: TileSubType.Fish,
+      };
+      actor.name = this.game.nameGenerator.generate(actor.subType);
+      actor.validBiomes = this.waterBiomes;
+      actor.range = 15;
+      actor.path = [];
+      actor.animator = new Animator(this.game, actor as any, 0.3);
+      actor.brain = new BrainFish(this.game, actor as any);
+      actor.description = new Description(actor);
+      this.spawnActor(actor, Layer.ENTITY);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.seagullCount; i++) {
-      this.spawnActor(Seagull);
+      // SEAGULL
+      actor = {
+        id: generateId(),
+        position: this.game.map.getRandomTilePositions(
+          this.airBiomes,
+          1,
+          false
+        )[0],
+        animatedTile: Tile.seagull,
+        type: TileType.Entity,
+        subType: TileSubType.Bird,
+      };
+      actor.name = this.game.nameGenerator.generate(actor.subType);
+      actor.validBiomes = this.airBiomes;
+      actor.range = 25;
+      actor.path = [];
+      actor.animator = new Animator(this.game, actor as any, 0.3);
+      actor.brain = new BrainBird(this.game, actor as any);
+      actor.description = new Description(actor);
+      this.spawnActor(actor, Layer.ENTITY);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.mushroomCount; i++) {
-      this.spawnActor(Mushroom);
+      // MUSHROOM
+      actor = {
+        id: generateId(),
+        position: this.game.map.getRandomTilePositions(
+          this.landBiomes,
+          1,
+          true
+        )[0],
+        animatedTile: Tile.mushroom,
+        type: TileType.Entity,
+        subType: TileSubType.Animal,
+      };
+      actor.name = this.game.nameGenerator.generate(actor.subType);
+      actor.path = [];
+      actor.range = 15;
+      actor.animator = new Animator(this.game, actor as any, 2.25);
+      actor.brain = new BrainMushroom(this.game, actor as any);
+      actor.description = new Description(actor);
+      this.spawnActor(actor, Layer.ENTITY);
     }
 
     this.game.renderer.renderChunkedLayers(
@@ -138,9 +246,10 @@ export class ManagerActors {
         Math.floor(GameSettings.options.gameSize.height / 2)
       )
     );
+
     this.game.userInterface.components.updateSideBarContent(
       "Entities",
-      this.actors
+      this.withBrain.entities
     );
   }
 
@@ -163,84 +272,38 @@ export class ManagerActors {
       this.treeManager.spawn(TreeSpecies.treeSpecies[type]);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.shrubCount; i++) {
-      this.spawnShrub();
+      this.shrubManager.spawn();
     }
   }
 
-  private spawnActor<ActorWithSubtype extends Actor>(classType: {
-    new (game: Game, pos: Point): ActorWithSubtype;
-    subType?: TileSubType;
-  }): Actor {
-    let pos: Point;
-    let actor: Actor;
-    switch (classType.subType) {
-      case TileSubType.Animal:
-        // get a random position in biome
-        pos = this.game.map.getRandomTilePositions(this.landBiomes, 1, true)[0];
-        break;
-      case TileSubType.Fish:
-        pos = this.game.map.getRandomTilePositions(
-          this.waterBiomes,
-          1,
-          false
-        )[0];
-        break;
-      case TileSubType.Bird:
-        pos = this.game.map.getRandomTilePositions(this.airBiomes, 1, true)[0];
-        break;
-      default:
-        pos = this.game.map.getRandomTilePositions(this.landBiomes, 1, true)[0];
-        break;
-    }
-    if (pos) {
-      actor = new classType(this.game, pos);
-      this.actors.push(actor);
-      this.allActors.push(actor);
-      this.game.timeManager.addToSchedule(actor, true);
+  public spawnActor(
+    actor: ActorBase & WithPosition & WithID,
+    layer: Layer
+  ): ActorBase {
+    this.world.add(actor);
+    if (actor.position) {
       this.game.collisionManager.occupyTile(
-        pos.x,
-        pos.y,
-        Layer.ENTITY,
+        actor.position.x,
+        actor.position.y,
+        layer,
         actor.id
       );
-      actor.draw();
+    }
+    if (actor.sprite) {
+      this.game.renderer.addToScene(actor.position, layer, actor.sprite);
     }
 
+    this.game.timeManager.addToSchedule(actor, true);
+    this.game.collisionManager.occupyTile(
+      actor.position.x,
+      actor.position.y,
+      Layer.ENTITY,
+      actor.id
+    );
     return actor;
   }
 
-  private spawnShrub(): EntityBase {
-    let pos: Point;
-    let actor: EntityBase;
-    pos = this.game.map.getRandomTilePositions(
-      this.shrubBiomes,
-      1,
-      true,
-      true
-    )[0];
-    if (pos) {
-      actor = this.world.add({
-        id: generateId(),
-        position: pos,
-        // name: "Shrub",
-        tile: Tile.shrub.id,
-        subType: TileSubType.Shrub,
-        type: TileType.Plant,
-      });
-      this.world.addComponent(actor, ComponentType.name, "Shrub");
-    }
-    return actor;
-  }
-
-  public getShrubs(): Query<EntityBase> {
-    return this.allShrubs;
-  }
-
-  public getTrees(): Query<EntityBase> {
-    return this.allTrees;
-  }
-
-  public getColliders(): Query<EntityBase> {
-    return this.allColliders;
+  public getWithPosition(): Query<ActorBase & WithPosition> {
+    return this.withPosition;
   }
 }

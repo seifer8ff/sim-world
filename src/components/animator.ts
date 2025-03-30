@@ -1,22 +1,30 @@
 import { Game } from "../game";
 import { AnimatedSprite, Assets, Texture } from "pixi.js";
-import { Actor } from "../entities/actor";
 import { GameSettings } from "../game-settings";
+import { ActorBase, WithAnimator } from "../entities/actor";
+import { Tile } from "../tile";
 
 export class Animator {
-  public animSpeed: number = 1;
+  // public animSpeed: number = 1; // set during gameplay to adjust speed (like when time is scaled)
   private currentAnimation: string;
   private animationFrames: { [key: string]: string[] }; // frames by key name
 
-  constructor(private game: Game, private actor: Actor) {
-    if (this.actor.tile.animationKeys) {
+  constructor(
+    private game: Game,
+    private actor: WithAnimator,
+    private animSpeed: number = 1 // the initial modifier for the anim speed. Set during init and not changed
+  ) {
+    this.currentAnimation = "";
+    this.animationFrames = {};
+    const tile = Tile;
+    if (this.actor.animatedTile.animationKeys) {
       const frames: { [key: string]: any } = Assets.cache.get(
-        this.actor.tile.spritePath
+        this.actor.animatedTile.spritePath
       ).data.frames;
 
       this.animationFrames = {};
 
-      for (let animationKey of this.actor.tile.animationKeys) {
+      for (let animationKey of this.actor.animatedTile.animationKeys) {
         this.animationFrames[animationKey] = [];
         for (let key in frames) {
           if (key.includes(animationKey)) {
@@ -25,7 +33,7 @@ export class Animator {
         }
         this.animationFrames[animationKey].sort();
       }
-      this.setAnimation(this.actor.tile.animationKeys[0]);
+      this.setAnimation(this.actor.animatedTile.animationKeys[0]);
     }
   }
 
@@ -45,12 +53,14 @@ export class Animator {
       animatedSprite = this.actor.sprite as AnimatedSprite;
     }
     if (GameSettings.options.toggles.enableAnimations) {
-      animatedSprite.animationSpeed =
-        this.animSpeed *
-        GameSettings.options.animationSpeed *
-        this.game.timeManager.timeScale;
+      this.scaleAnimSpeed(this.game.timeManager.timeScale);
       animatedSprite.loop = true;
       animatedSprite.play();
     }
+  }
+
+  public scaleAnimSpeed(timeScale: number) {
+    this.actor.sprite.animationSpeed =
+      this.animSpeed * GameSettings.options.animationSpeed * timeScale;
   }
 }

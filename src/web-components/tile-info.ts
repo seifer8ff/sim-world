@@ -6,11 +6,12 @@ import "@shoelace-style/shoelace/dist/components/avatar/avatar.js";
 import "@shoelace-style/shoelace/dist/components/card/card.js";
 import CloseIcon from "../shoelace/assets/icons/x.svg";
 import { PointerTarget } from "../camera";
-import { DescriptionBlock, isActor } from "../entities/actor";
 import { Tile } from "../tile";
 import { CachedTexture, getCachedTileTexture } from "../assets";
 import { Biome, Biomes } from "../biomes";
 import { Game } from "../game";
+import { Description, DescriptionBlock } from "../components/description";
+import { isActor } from "../entities/actor";
 
 export interface TileStats {
   height: number;
@@ -151,7 +152,8 @@ export class TileInfo extends HTMLElement {
     this.dElements.forEach((dElement) => {
       // there's no need to update the icon, it only changes when target changes
       const text = dElement.element.querySelector("span");
-      text.textContent = dElement.dBlock.getDescription(this.target);
+      // text.textContent = dElement.dBlock.getDescription(this.target);
+      text.textContent = dElement.dBlock.content;
     });
   }
 
@@ -166,6 +168,7 @@ export class TileInfo extends HTMLElement {
   // build the content of the tile info card
   // called when changing targets
   public setContent(target: PointerTarget): void {
+    console.log("set content", target);
     // console.log("set content to", target);
     this.target = target;
     if (target == null) {
@@ -178,16 +181,18 @@ export class TileInfo extends HTMLElement {
     this.container.style.display = "flex";
 
     let cachedSprite: CachedTexture;
+    console.log("target.target", target.target);
 
     if (isActor(target.target)) {
-      const isAnimated = target.target.tile.animationKeys != null;
+      const isAnimated = target.target.animatedTile.animationKeys != null;
       let spritePath;
       this.label.textContent = `${target.target.name}`;
 
       if (isAnimated) {
-        spritePath = target.target.tile.iconPath;
+        spritePath = target.target.animatedTile.iconPath;
       } else {
-        spritePath = target.target.tile.spritePath;
+        // spritePath = target.target.tile.spritePath;
+        spritePath = Tile.tiles[target.target.tile].spritePath;
       }
       cachedSprite = getCachedTileTexture(spritePath);
       this.avatar.style.transform =
@@ -233,9 +238,9 @@ export class TileInfo extends HTMLElement {
     let dBlocks: DescriptionBlock[] = [];
 
     if (isActor(target.target)) {
-      dBlocks = target.target.getDescription();
+      dBlocks = target.target.description?.generate() || [];
     } else if (target.target instanceof Tile) {
-      dBlocks = Tile.getDescription(target);
+      dBlocks = Description.generateTileDescription(target);
     } else {
       // nothing to display
       this.isVisible = false;
@@ -245,7 +250,7 @@ export class TileInfo extends HTMLElement {
     this.dElements = dBlocks.map((block) => {
       const blockContainer = this.generateDescriptionBlock(
         block.icon,
-        block.getDescription(target)
+        block.content
       );
       bodyContainer.appendChild(blockContainer);
       return { element: blockContainer, dBlock: block };

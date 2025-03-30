@@ -1,4 +1,4 @@
-import { EntityBase } from "./entities/entity";
+import { ActorBase } from "./entities/actor";
 import { TreeSpecies, TreeSpeciesEnum } from "./entities/tree/tree-species";
 import { Game } from "./game";
 import { BiomeId, Biomes } from "./biomes";
@@ -51,34 +51,14 @@ export class ManagerTrees {
 
   public init(): void {}
 
-  public spawn(species: TreeSpecies): EntityBase {
-    let pos: Point;
-    let actor: EntityBase;
-    let biomes: BiomeId[];
-    switch (species.id) {
-      case TreeSpeciesEnum.PINE:
-        biomes = [Biomes.Biomes.moistdirt.id];
-        break;
-      case TreeSpeciesEnum.BIRCH:
-        biomes = [Biomes.Biomes.hillsmid.id, Biomes.Biomes.hillshigh.id];
-        break;
-      case TreeSpeciesEnum.COTTONCANDY:
-        biomes = [Biomes.Biomes.valley.id];
-        break;
-      case TreeSpeciesEnum.MAPLE:
-        biomes = [Biomes.Biomes.snowhillshillsmid.id];
-        break;
-      default:
-        biomes = [Biomes.Biomes.moistdirt.id];
-        break;
-    }
-    pos = this.game.map.getRandomTilePositions(biomes, 1, true, true)[0];
+  public spawnAt(pos: Point, species: TreeSpecies): ActorBase {
     if (pos) {
-      // console.log("tree pos", pos);
+      let actor: ActorBase;
+      console.log("spawn at: ", pos);
       let trunkBaseTextureIndex =
         SystemTreeRenderer.getRandomTrunkBaseTexture(species);
       let trunkTextureIndex = SystemTreeRenderer.getRandomTrunkTexture(species);
-      let entityProps: EntityBase = {
+      let entityProps: ActorBase = {
         id: generateId(),
         name: "Tree",
         position: pos,
@@ -124,11 +104,37 @@ export class ManagerTrees {
         Layer.TREE,
         actor.renderable
       );
+      return actor;
     }
-    return actor;
+    return null;
   }
 
-  public growTree(tree: EntityBase): boolean {
+  public spawn(species: TreeSpecies): ActorBase {
+    let pos: Point;
+    let actor: ActorBase;
+    let biomes: BiomeId[];
+    switch (species.id) {
+      case TreeSpeciesEnum.PINE:
+        biomes = [Biomes.Biomes.moistdirt.id];
+        break;
+      case TreeSpeciesEnum.BIRCH:
+        biomes = [Biomes.Biomes.hillsmid.id, Biomes.Biomes.hillshigh.id];
+        break;
+      case TreeSpeciesEnum.COTTONCANDY:
+        biomes = [Biomes.Biomes.valley.id];
+        break;
+      case TreeSpeciesEnum.MAPLE:
+        biomes = [Biomes.Biomes.snowhillshillsmid.id];
+        break;
+      default:
+        biomes = [Biomes.Biomes.moistdirt.id];
+        break;
+    }
+    pos = this.game.map.getRandomTilePositions(biomes, 1, true, true)[0];
+    return this.spawnAt(pos, species);
+  }
+
+  public growTree(tree: ActorBase): boolean {
     // console.log("-- curve in growth func: ", tree.curve);
     let growSuccess = false;
     growSuccess = SystemBranches.growTrunk(tree);
@@ -145,7 +151,7 @@ export class ManagerTrees {
     return growSuccess;
   }
 
-  public drawTree(tree: EntityBase): void {
+  public drawTree(tree: ActorBase): void {
     const {
       renderable,
       trunk,

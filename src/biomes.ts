@@ -16,7 +16,6 @@ export const ImpassibleBorder: BiomeId[] = [
 ];
 
 export type BiomeId =
-  | "default"
   | "ocean"
   | "beach"
   | "moistdirt"
@@ -30,7 +29,7 @@ export type BiomeId =
   | "hillgrass"
   | "swamp"
   | "oceandeep"
-  | "snowsandydirt"
+  // | "snowsandydirt"
   | "snowmoistdirt"
   | "snowhillshillsmid";
 
@@ -127,7 +126,7 @@ export class Biomes {
     return value;
   }
 
-  static readonly Biomes: { [key in BiomeId]?: Biome } = {
+  static readonly Biomes: { [key in BiomeId]: Biome } = {
     ocean: {
       id: "ocean",
       name: "Ocean",

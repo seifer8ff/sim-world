@@ -1,6 +1,5 @@
 import { KEYS, DIRS, Path, RNG } from "rot-js";
 import { Game } from "../game";
-import { Actor, DescriptionBlock } from "./actor";
 import { Point } from "../point";
 import { InputUtility } from "../input-utility";
 import { Tile, TileSubType, TileType } from "../tile";
@@ -15,7 +14,7 @@ import { generateId } from "../misc-utility";
 import { Renderable } from "../renderer";
 import { GameSettings } from "../game-settings";
 
-export class Player implements Actor {
+export class Player {
   id: number;
   tile: Tile;
   type: TileType;
@@ -59,7 +58,7 @@ export class Player implements Actor {
   }
 
   public plan(): void {
-    this.action = new WaitAction(this.game, this, this.position);
+    // this.action = new WaitAction(this.game, this, this.position);
   }
 
   // act(): Promise<any> {
@@ -112,24 +111,24 @@ export class Player implements Actor {
     return validInput;
   }
 
-  public getDescription(): DescriptionBlock[] {
-    const descriptionBlocks: DescriptionBlock[] = [];
-    descriptionBlocks.push({
-      icon: TypeIcon,
-      getDescription: () => "Player",
-    });
-    if (this.goal) {
-      descriptionBlocks.push({
-        icon: GoalIcon,
-        getDescription: () => this.goal.name,
-      });
-    }
-    if (this.action) {
-      descriptionBlocks.push({
-        icon: ActionIcon,
-        getDescription: () => this.action.name,
-      });
-    }
-    return descriptionBlocks;
-  }
+  // public getDescription(): DescriptionBlock[] {
+  //   const descriptionBlocks: DescriptionBlock[] = [];
+  //   descriptionBlocks.push({
+  //     icon: TypeIcon,
+  //     getDescription: () => "Player",
+  //   });
+  //   if (this.goal) {
+  //     descriptionBlocks.push({
+  //       icon: GoalIcon,
+  //       getDescription: () => this.goal.name,
+  //     });
+  //   }
+  //   if (this.action) {
+  //     descriptionBlocks.push({
+  //       icon: ActionIcon,
+  //       getDescription: () => this.action.name,
+  //     });
+  //   }
+  //   return descriptionBlocks;
+  // }
 }

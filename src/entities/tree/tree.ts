@@ -1,5 +1,4 @@
 import { Game } from "../../game";
-import { Actor, DescriptionBlock } from "../actor";
 import { Point } from "../../point";
 import { Tile, TileSubType, TileType } from "../../tile";
 import { Action } from "../../actions/action";
@@ -24,6 +23,7 @@ import { GameSettings } from "../../game-settings";
 import { Color as ColorType } from "rot-js/lib/color";
 import { clamp } from "rot-js/lib/util";
 import { LightManager } from "../../light-manager";
+import { ActorBase } from "../actor";
 
 export interface Segment {
   position: Point;
@@ -57,7 +57,7 @@ export interface TreeTrunk extends TreeBranch {
   trunkBase?: Sprite;
 }
 
-export class Tree implements Actor {
+export class Tree {
   id: number;
   name?: string;
   tile: Tile;
@@ -580,7 +580,11 @@ export class Tree implements Actor {
   }
 
   public plan(): void {
-    this.action = new GrowAction(this.game, this, this.position);
+    this.action = new GrowAction(
+      this.game,
+      this as unknown as ActorBase,
+      this.position
+    );
   }
 
   act(): Promise<any> {
@@ -765,29 +769,29 @@ export class Tree implements Actor {
     });
   }
 
-  public getDescription(): DescriptionBlock[] {
-    const descriptionBlocks: DescriptionBlock[] = [];
-    descriptionBlocks.push({
-      icon: PinIcon,
-      getDescription: (pointerTarget?: PointerTarget) =>
-        `${pointerTarget?.position.x}, ${pointerTarget?.position.y}`,
-    });
-    descriptionBlocks.push({
-      icon: TypeIcon,
-      getDescription: () => this.subType,
-    });
-    if (this.goal) {
-      descriptionBlocks.push({
-        icon: GoalIcon,
-        getDescription: () => this.goal.name,
-      });
-    }
-    if (this.action) {
-      descriptionBlocks.push({
-        icon: ActionIcon,
-        getDescription: () => this.action.name,
-      });
-    }
-    return descriptionBlocks;
-  }
+  // public getDescription(): DescriptionBlock[] {
+  //   const descriptionBlocks: DescriptionBlock[] = [];
+  //   descriptionBlocks.push({
+  //     icon: PinIcon,
+  //     getDescription: (pointerTarget?: PointerTarget) =>
+  //       `${pointerTarget?.position.x}, ${pointerTarget?.position.y}`,
+  //   });
+  //   descriptionBlocks.push({
+  //     icon: TypeIcon,
+  //     getDescription: () => this.subType,
+  //   });
+  //   if (this.goal) {
+  //     descriptionBlocks.push({
+  //       icon: GoalIcon,
+  //       getDescription: () => this.goal.name,
+  //     });
+  //   }
+  //   if (this.action) {
+  //     descriptionBlocks.push({
+  //       icon: ActionIcon,
+  //       getDescription: () => this.action.name,
+  //     });
+  //   }
+  //   return descriptionBlocks;
+  // }
 }

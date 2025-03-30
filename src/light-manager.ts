@@ -9,8 +9,8 @@ import { BiomeId } from "./biomes";
 import { LightPhase } from "./map-shadows";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
-import { Actor } from "./entities/actor";
-import { Buffer } from "buffer";
+import { Query } from "miniplex";
+import { ActorBase } from "./entities/actor";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -250,19 +250,27 @@ export class LightManager {
   }
 
   public tintActors(
-    objs: Actor[],
+    objs: Query<ActorBase>,
     highlight: boolean = false,
     layer: Layer = Layer.TERRAIN
   ) {
     if (GameSettings.shouldTint()) {
-      for (let i = 0; i < objs.length; i++) {
-        const obj = objs[i];
-        if (!obj?.sprite) {
-          console.log("no sprite to tint for obj:", obj);
+      for (const actor of objs) {
+        // for (let i = 0; i < objs.length; i++) {
+        if (!actor?.sprite) {
+          console.log("no sprite to tint for obj:", actor);
           continue;
         }
-        let translatedX = Tile.translate(obj.position.x, layer, Layer.TERRAIN);
-        let translatedY = Tile.translate(obj.position.y, layer, Layer.TERRAIN);
+        let translatedX = Tile.translate(
+          actor.position.x,
+          layer,
+          Layer.TERRAIN
+        );
+        let translatedY = Tile.translate(
+          actor.position.y,
+          layer,
+          Layer.TERRAIN
+        );
         let colorArray = this.game.map.lightManager.getLightFor(
           translatedX,
           translatedY,
@@ -270,7 +278,7 @@ export class LightManager {
         );
         if (colorArray?.length) {
           // tint the obj
-          this.game.renderer.tintObjectWithChildren(obj.sprite, colorArray);
+          this.game.renderer.tintObjectWithChildren(actor.sprite, colorArray);
         }
       }
     }
@@ -284,7 +292,7 @@ export class LightManager {
   }
 
   public clearAllDynamicLights() {
-    for (let actor of this.game.actorManager.actors) {
+    for (const actor of this.game.actorManager.withAnimator) {
       if (this.lightEmitterById[actor.id]) {
         const [x, y] = this.lightEmitterById[actor.id];
         this.lightEmitters.setLight(x, y, null);
@@ -297,7 +305,7 @@ export class LightManager {
     if (!GameSettings.options.toggles.enableDynamicLights) {
       return;
     }
-    for (let actor of this.game.actorManager.actors) {
+    for (const actor of this.game.actorManager.withAnimator) {
       if (this.lightEmitterById[actor.id]) {
         const [x, y] = this.lightEmitterById[actor.id];
         if (actor.position.x != x || actor.position.y != y) {
@@ -313,7 +321,7 @@ export class LightManager {
       return;
     }
     if (this.game.timeManager.isNighttime) {
-      for (let actor of this.game.actorManager.actors) {
+      for (const actor of this.game.actorManager.withAnimator) {
         let updateLight = false;
         if (!this.lightEmitterById[actor.id]) {
           updateLight = true;

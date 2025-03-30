@@ -114,7 +114,7 @@ export function processManualTiles() {
   // for each manually defined tile, add it to the Tile object
   // this is for tiles that don't have a tileset
   const manualTiles = [
-    Tile.animal,
+    Tile.mushroom,
     Tile.person,
     Tile.player,
     Tile.shrub,

@@ -1,15 +1,4 @@
-import { BiomeId, Biomes } from "./biomes";
-import { DescriptionBlock } from "./entities/actor";
-import PinIcon from "./shoelace/assets/icons/pin-map.svg";
-import TextIcon from "./shoelace/assets/icons/card-text.svg";
-import TempIcon from "./shoelace/assets/icons/thermometer-half.svg";
-import MoistureIcon from "./shoelace/assets/icons/droplet.svg";
-import SunIcon from "./shoelace/assets/icons/brightness-high.svg";
-import MagnetIcon from "./shoelace/assets/icons/magnet.svg";
-import HeightIcon from "./shoelace/assets/icons/arrow-up-short.svg";
-import { PointerTarget } from "./camera";
-import { AnimatedSprite, Assets, Graphics, Sprite } from "pixi.js";
-import { update } from "lodash";
+import { BiomeId } from "./biomes";
 import { Point } from "./point";
 import { Layer } from "./renderer";
 
@@ -61,7 +50,7 @@ export class Tile {
     "human_00",
     "#E7E6AC"
   );
-  static readonly animal = new Tile(
+  static readonly mushroom = new Tile(
     TileType.Entity,
     "sprites/mushroom_00/mushroom_00.json",
     "idle_000",
@@ -161,54 +150,5 @@ export class Tile {
       return Math.floor(positionParameter * Tile.tileDensityRatio);
     }
     return Math.floor(positionParameter);
-  }
-
-  public static getDescription(target: PointerTarget): DescriptionBlock[] {
-    const descriptionBlocks: DescriptionBlock[] = [];
-    if (!target) return descriptionBlocks;
-
-    descriptionBlocks.push({
-      icon: PinIcon,
-      getDescription: (pointerTarget: PointerTarget) =>
-        `${pointerTarget.position.x}, ${target.position.y}`,
-    });
-    if (target?.info) {
-      descriptionBlocks.push({
-        icon: TextIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${pointerTarget?.info?.biome?.description || "Unknown Biome"}`,
-      });
-      descriptionBlocks.push({
-        icon: TempIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.temperaturePercent * 100)}°F`,
-      });
-      descriptionBlocks.push({
-        icon: HeightIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.height * 100)} height`,
-      });
-      descriptionBlocks.push({
-        icon: MoistureIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.moisture * 100)}% moisture`,
-      });
-      descriptionBlocks.push({
-        icon: MagnetIcon,
-        getDescription: (pointerTarget: PointerTarget) =>
-          `${Math.round(pointerTarget?.info?.magnetism * 100)} magnetism`,
-      });
-      descriptionBlocks.push({
-        icon: SunIcon,
-        getDescription: (pointerTarget: PointerTarget) => {
-          // console.log("update sunlight", pointerTarget);
-          return `${
-            Math.round(pointerTarget?.info?.sunlight * 100) || "??"
-          }% light`;
-        },
-      });
-    }
-
-    return descriptionBlocks;
   }
 }

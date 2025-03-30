@@ -12,7 +12,6 @@ import { Overlay } from "./web-components/overlay";
 import { UtilityActions } from "./web-components/utility-actions";
 import { IndicatorSun } from "./web-components/indicator-sun";
 import { IndicatorTileSelection } from "./web-components/indicator-tile-selection";
-import { Actor, isActor } from "./entities/actor";
 import { UserInterface } from "./user-interface";
 import { getCachedTileTexture } from "./assets";
 import OverlayIcon from "./shoelace/assets/icons/layers-half.svg";
@@ -22,6 +21,7 @@ import { BiomeId, Biomes } from "./biomes";
 import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
 import { serialize } from "@shoelace-style/shoelace";
+import { ActorBase } from "./entities/actor";
 
 export class ManagerWebComponents {
   private timeControl: TimeControl;
@@ -228,10 +228,10 @@ export class ManagerWebComponents {
 
   public updateSideBarContent(tabName: TopLevelMenu, content: any[]): void {
     if (tabName === "Entities") {
-      const entityMenuItems = content.map((entity) => {
-        return this.mapEntityToMenuItem(entity);
+      const actorMenuItems = content.map((actor) => {
+        return this.mapEntityToMenuItem(actor);
       });
-      this.sideMenu.setTabContent(tabName, entityMenuItems);
+      this.sideMenu.setTabContent(tabName, actorMenuItems);
     } else if (tabName === "Build") {
       const buildMenuItems = content.map(
         (buildOption: { name: string; iconPath: string; id: BiomeId }) => {
@@ -242,26 +242,26 @@ export class ManagerWebComponents {
     }
   }
 
-  public mapEntityToMenuItem(entity: Actor): MenuItem {
-    const isAnimated = entity.tile.animationKeys != null;
+  public mapEntityToMenuItem(actor: ActorBase): MenuItem {
+    const isAnimated = actor?.animatedTile?.animationKeys != null;
     // use regex to select "mushroom_00_walk_14x18",
     // out of "sprites/mushroom_00_walk_14x18/mushroom_00_walk_14x18.json",
     let spritePath;
     if (isAnimated) {
       // spritePath = animatedTilePathToStatic(entity.tile.spritePath);
-      spritePath = entity.tile.iconPath;
+      spritePath = actor.animatedTile.iconPath;
     } else {
-      spritePath = entity.tile.spritePath;
+      spritePath = actor.animatedTile.spritePath;
     }
     return {
-      id: `${entity.id}`,
+      id: `${actor.id}`,
       icon: getCachedTileTexture(spritePath),
       clickHandler: () => {
-        console.log(`clicked on ${entity.id}`);
-        this.ui.camera.setPointerTarget(entity.position, entity, true);
+        console.log(`clicked on ${actor.id}`);
+        this.ui.camera.setPointerTarget(actor.position, actor, true);
       },
-      label: entity.name,
-      tooltip: `Entity: ${entity.id}`,
+      label: actor.name,
+      tooltip: `Entity: ${actor.id}`,
     };
   }
 

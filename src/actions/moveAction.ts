@@ -1,11 +1,11 @@
 import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
-import { Actor } from "../entities/actor";
 import { Layer } from "../renderer";
 import { MapWorld } from "../map-world";
 import { generateId } from "../misc-utility";
 import { GameSettings } from "../game-settings";
+import { ActorBase } from "../entities/actor";
 
 export class MoveAction implements Action {
   readonly id: number;
@@ -14,7 +14,7 @@ export class MoveAction implements Action {
 
   constructor(
     private game: Game,
-    private actor: Actor,
+    private actor: ActorBase,
     public targetPos: Point
   ) {
     this.id = generateId();

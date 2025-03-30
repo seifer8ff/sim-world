@@ -1,9 +1,8 @@
 import { Game } from "./game";
-import { Actor } from "./entities/actor";
 import Action from "rot-js/lib/scheduler/action";
 import { LightPhase } from "./map-shadows";
 import { GameSettings } from "./game-settings";
-import { EntityBase } from "./entities/entity";
+import { ActorBase } from "./entities/actor";
 
 export enum Season {
   Spring = "spring",
@@ -76,7 +75,7 @@ export class TimeManager {
   }
 
   public addToSchedule(
-    actor: Actor | EntityBase,
+    actor: ActorBase,
     repeat: boolean,
     initialTimeDelay?: number
   ): Action {
@@ -87,7 +86,7 @@ export class TimeManager {
     this.calculateTurnPercent(remainingAnimDelay);
   }
 
-  public nextOnSchedule(): Actor {
+  public nextOnSchedule(): ActorBase {
     this.calculateCurrentTime();
     return this.scheduler.next();
   }

@@ -1,4 +1,4 @@
-import { EntityBase } from "./entities/entity";
+import { ActorBase } from "./entities/actor";
 import { TreeSpecies } from "./entities/tree/tree-species";
 import { Game } from "./game";
 import { Point } from "./point";
@@ -16,8 +16,8 @@ import { SystemTreeRenderer } from "./system-tree-renderer";
 export class SystemBranches {
   constructor() {}
 
-  public static add(species: TreeSpecies): EntityBase {
-    let added: EntityBase = {
+  public static add(species: TreeSpecies): ActorBase {
+    let added: ActorBase = {
       branches: [],
       branchesPerSegment: getNumberFromRange(
         species.maxBranchesPerSegment,
@@ -39,7 +39,7 @@ export class SystemBranches {
     return added;
   }
 
-  public static growTrunk(tree: EntityBase): boolean {
+  public static growTrunk(tree: ActorBase): boolean {
     // console.log("species", species, species?.trunkSegmentCount);
     const species = TreeSpecies.treeSpecies[tree.species];
     const trunkSegmentCount = species?.trunkSegmentCount || 0;
@@ -70,7 +70,7 @@ export class SystemBranches {
     return false;
   }
 
-  public static growBranches(growthStep: number, tree: EntityBase): boolean {
+  public static growBranches(growthStep: number, tree: ActorBase): boolean {
     const species = TreeSpecies.treeSpecies[tree.species];
     let growSuccess = false;
     if (tree.branches.length === 0) {
@@ -145,7 +145,7 @@ export class SystemBranches {
   public static growBranch(
     growthStep: number,
     branch: TreeBranch,
-    tree: EntityBase,
+    tree: ActorBase,
     species: TreeSpecies
   ): boolean {
     const maxSegmentCount = branch.isTrunk
@@ -180,7 +180,7 @@ export class SystemBranches {
   public static addSegment(
     branch: TreeBranch,
     lastSegment: Segment,
-    tree: EntityBase,
+    tree: ActorBase,
     species: TreeSpecies
   ): Segment {
     if (lastSegment.width <= species.branchSegmentWidthMin) {
@@ -218,7 +218,7 @@ export class SystemBranches {
   public static addBranch(
     growthStep: number,
     branch: TreeBranch,
-    tree: EntityBase,
+    tree: ActorBase,
     species: TreeSpecies
   ): TreeBranch {
     // add branch

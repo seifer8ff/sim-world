@@ -4,11 +4,11 @@ import { FOV } from "rot-js/lib/index";
 import { Game } from "./game";
 import { Tile, TileType } from "./tile";
 import { Point } from "./point";
-import { Actor } from "./entities/actor";
 import { Layer } from "./renderer";
 import { Autotile } from "./autotile";
 import { Season } from "./time-manager";
 import { Biome, BiomeId, Biomes } from "./biomes";
+import { ActorBase } from "./entities/actor";
 
 export class MapWorldCellular {
   private rawMap: { [key: string]: Biome };
@@ -114,7 +114,7 @@ export class MapWorldCellular {
     }
   }
 
-  UpdateFOV(actor: Actor) {
+  UpdateFOV(actor: ActorBase) {
     const fov = new FOV.PreciseShadowcasting(this.lightPasses.bind(this));
     let bgTile;
     let key;

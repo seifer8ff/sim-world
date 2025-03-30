@@ -1,4 +1,4 @@
-import { EntityBase } from "./entities/entity";
+import { ActorBase } from "./entities/actor";
 import { TreeSpecies } from "./entities/tree/tree-species";
 import {
   getItemFromRange,

@@ -6,8 +6,8 @@ import { Layer } from "./renderer";
 import { Camera } from "./camera";
 
 import { ManagerWebComponents } from "./manager-web-components";
-import { isActor } from "./entities/actor";
 import { BiomeId } from "./biomes";
+import { isActor } from "./entities/actor";
 
 export class UserInterface {
   public application: PIXI.Application<PIXI.ICanvas>;

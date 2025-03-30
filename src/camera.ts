@@ -6,7 +6,6 @@ import { UserInterface } from "./user-interface";
 import { KEYS, DIRS, Util } from "rot-js";
 import { InputUtility } from "./input-utility";
 import TinyGesture from "tinygesture";
-import { Actor, isActor } from "./entities/actor";
 import { Layer } from "./renderer";
 import {
   indexToPosition,
@@ -18,6 +17,7 @@ import { HeightLayer, MapWorld } from "./map-world";
 import { TileStats } from "./web-components/tile-info";
 import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
+import { ActorBase, isActor } from "./entities/actor";
 
 export interface Viewport {
   width: number;
@@ -27,7 +27,7 @@ export interface Viewport {
 
 export interface PointerTarget {
   position: Point;
-  target: Tile | Actor;
+  target: Tile | ActorBase;
   info?: TileStats;
 }
 
@@ -36,7 +36,7 @@ export class Camera {
   public viewportUnpadded: Viewport;
   public viewportTilesPadded: number[];
   public viewportTilesUnpadded: number[];
-  public viewportTarget: Point | Actor;
+  public viewportTarget: Point | ActorBase;
   public pointerTarget: PointerTarget;
   private currentZoom: number;
   private defaultZoom: number;
@@ -133,7 +133,7 @@ export class Camera {
     this.viewportTarget = this.TileToScreenCoords(x, y);
   }
 
-  public followActor(actor: Actor) {
+  public followActor(actor: ActorBase) {
     this.viewportTarget = actor;
   }
 
@@ -150,7 +150,7 @@ export class Camera {
 
   public setPointerTarget(
     pos: Point,
-    target: Tile | Actor,
+    target: Tile | ActorBase,
     viewportTarget = false
   ) {
     if (this.game.gameState.stage !== Stages.Play) {
@@ -161,7 +161,7 @@ export class Camera {
         position: target.position,
         target: target,
       };
-      this.ui.components.sideMenu.setEntityTarget(target);
+      this.ui.components.sideMenu.setActorTarget(target);
       if (viewportTarget) {
         this.viewportTarget = target;
       }
@@ -171,7 +171,7 @@ export class Camera {
         target: target,
         info: this.game.getTileInfoAt(pos.x, pos.y),
       };
-      this.ui.components.sideMenu.setEntityTarget(null);
+      this.ui.components.sideMenu.setActorTarget(null);
       if (viewportTarget) {
         this.viewportTarget = pos;
       }
@@ -180,7 +180,7 @@ export class Camera {
   }
 
   public clearPointerTarget() {
-    this.ui.components.sideMenu.setEntityTarget(null);
+    this.ui.components.sideMenu.setActorTarget(null);
     this.ui.components.tileInfo.setContent(null);
     this.game.renderer.removeFromCache(this.pointerTarget.position, Layer.UI);
     this.pointerTarget = null;
@@ -196,8 +196,8 @@ export class Camera {
     // check if plant at tile pos
     // if so, select it
     let tile: Tile;
-    let actors: Actor[];
-    let actor: Actor;
+    let actors: ActorBase[];
+    let actor: ActorBase;
 
     actors = this.game.actorManager.getActorsAt(x, y);
     if (actors?.length) {

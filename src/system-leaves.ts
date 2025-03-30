@@ -1,4 +1,4 @@
-import { EntityBase } from "./entities/entity";
+import { ActorBase } from "./entities/actor";
 import { TreeSpecies } from "./entities/tree/tree-species";
 import { getItemFromRange, getNumberFromRange } from "./misc-utility";
 import { RNG } from "rot-js";
@@ -14,8 +14,8 @@ export class SystemLeaves {
 
   public init(): void {}
 
-  public static add(species: TreeSpecies): EntityBase {
-    let added: EntityBase = {
+  public static add(species: TreeSpecies): ActorBase {
+    let added: ActorBase = {
       leaves: new Map<number, Leaf[]>(),
       leafTextureIndex: SystemTreeRenderer.getRandomLeafTexture(species),
       leafDistance: species.leafDistance,
@@ -29,7 +29,7 @@ export class SystemLeaves {
     return added;
   }
 
-  public static growLeaves(growthStep: number, tree: EntityBase): void {
+  public static growLeaves(growthStep: number, tree: ActorBase): void {
     let currentLeaves: Leaf[] = [];
     let newLeaves: Leaf[] = [];
     let branch: TreeBranch;

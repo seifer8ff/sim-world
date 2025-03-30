@@ -4,7 +4,6 @@ import { positionToIndex } from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { GameSettings } from "./game-settings";
 import { Tile } from "./tile";
-import { WithID } from "./entities/entity";
 
 export class ManagerCollision {
   public actorCollisionGrid: Int32Array;
@@ -79,7 +78,7 @@ export class ManagerCollision {
     return this.actorCollisionGrid[index] === actorId;
   }
 
-  public isOccupiedBySelf(x: number, y: number, actor: WithID): boolean {
-    return this.isOccupiedByActor(x, y, actor.id);
+  public isOccupiedBySelf(x: number, y: number, actorId: number): boolean {
+    return this.isOccupiedByActor(x, y, actorId);
   }
 }
