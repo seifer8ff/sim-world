@@ -1,0 +1,12 @@
+{
+  "name": "asset-pack-scripts",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Script for running asset pack. Required to import modules in .assetpack.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {},
+  "dependencies": {}
+}

@@ -5,7 +5,7 @@
   "main": "app.js",
   "scripts": {
     "build": "webpack --config webpack.prod.js",
-    "build:assets": "assetpack -c .assetpack.js",
+    "build:assets": "assetpack -c .assetpack/.assetpack.js",
     "watch": "webpack --watch --config webpack.dev.js",
     "serve": "http-server ./ --port=8085 -c-1",
     "serve:prod": "cd dist && http-server ./ --port=8085 -c-1",
