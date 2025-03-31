@@ -57,8 +57,5 @@
     "pixi.js": "7.4.0",
     "scheduler-polyfill": "^1.2.1",
     "tinygesture": "^3.0.0"
-  },
-  "localDependencies": {
-    "@pixi/tilemap": "../tilemap-with-tint"
   }
 }

@@ -13,8 +13,7 @@ export enum Layer {
   TREE,
   UI,
 }
-import { CompositeTilemap } from "@pixi/tilemap";
-import { settings } from "@pixi/tilemap";
+import { CompositeTilemap, settings } from "./libs/pixi-tilemap.es";
 import { GameSettings } from "./game-settings";
 import { inverseLerp, lerp, positionToIndex } from "./misc-utility";
 import { RGBAColor } from "./light-manager";
@@ -31,12 +30,12 @@ export class Renderer {
   // 3x3 grid of tilemaps to render the terrain
   public terrainLayer = Array.from(
     { length: this.chunkCountPerSide * this.chunkCountPerSide },
-    () => new CompositeTilemap()
+    () => new CompositeTilemap(null)
   );
   public groundFXLayer = new PIXI.Container();
   public plantLayer = Array.from(
     { length: this.chunkCountPerSide * this.chunkCountPerSide },
-    () => new CompositeTilemap()
+    () => new CompositeTilemap(null)
   );
   public treeLayer = new PIXI.Container();
   public entityLayer = new PIXI.Container();

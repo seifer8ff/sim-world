@@ -1,63 +1,64 @@
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const FileManagerPlugin = require('filemanager-webpack-plugin');
-const path = require('path');
-const webpack = require('webpack');
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
+const FileManagerPlugin = require("filemanager-webpack-plugin");
+const path = require("path");
+const webpack = require("webpack");
 
 module.exports = {
-    entry: './src/app.ts',
-    module: {
-        rules: [
-            // {
-            //     test: /\.(png|jpg|gif)$/i,
-            //     use: [
-            //       {
-            //         loader: 'url-loader',
-            //         options: {
-            //           limit: 8192,
-            //         }
-            //       },
-            //     ],
-            //    type: 'javascript/auto'
-            //   },
-            // {
-            //   test: /\.png/,
-            //   type: 'asset/resource'
-            // },
-            // {
-            //   test: /\.json/,
-            //   type: 'asset/resource'
-            // },
-            {
-                test: /\.(png|svg|jpg|jpeg|gif)$/i,
-                type: 'asset/resource',
-            },
-            {
-                test: /\.css$/,
-                use: ['style-loader', 'css-loader']
-            },
-            {
-                test: /\.tsx?$/,
-                use: 'ts-loader',
-                exclude: /node_modules/
-            }
-        ]
+  entry: "./src/app.ts",
+  module: {
+    rules: [
+      // {
+      //     test: /\.(png|jpg|gif)$/i,
+      //     use: [
+      //       {
+      //         loader: 'url-loader',
+      //         options: {
+      //           limit: 8192,
+      //         }
+      //       },
+      //     ],
+      //    type: 'javascript/auto'
+      //   },
+      // {
+      //   test: /\.png/,
+      //   type: 'asset/resource'
+      // },
+      // {
+      //   test: /\.json/,
+      //   type: 'asset/resource'
+      // },
+      {
+        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        type: "asset/resource",
+      },
+      {
+        test: /\.css$/,
+        use: ["style-loader", "css-loader"],
+      },
+      {
+        test: /\.tsx?$/,
+        use: "ts-loader",
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: [".ts", ".tsx", ".js"],
+    fallback: {
+      buffer: require.resolve("buffer/"),
     },
-    resolve: {
-        extensions: ['.ts', '.tsx', '.js'],
-        fallback: {
-            buffer: require.resolve('buffer/')
-        }
-    },
-    output: {
-        filename: 'app.js',
-        clean: true,
-        path: path.resolve(__dirname, 'dist')
-    },
-    plugins: [
-        new HtmlWebpackPlugin({
-            title: "Sim World",
-            templateContent: `
+  },
+  output: {
+    filename: "app.js",
+    clean: true,
+    globalObject: "this",
+    path: path.resolve(__dirname, "dist"),
+  },
+  plugins: [
+    new HtmlWebpackPlugin({
+      title: "Sim World",
+      templateContent: `
         <html class="sl-theme-dark">
             <head>
                 <title>Sim World</title>
@@ -82,16 +83,13 @@ module.exports = {
                 </div>
             </body>
         </html>
-        `
-        }),
-        new CopyWebpackPlugin(
-            {
-
-                patterns: [
-                    { from: "./public", to: "public" }]
-            }
-        ),
-        new webpack.ProvidePlugin({
-            Buffer: ['buffer', 'Buffer'],
-        })]
+        `,
+    }),
+    new CopyWebpackPlugin({
+      patterns: [{ from: "./public", to: "public" }],
+    }),
+    new webpack.ProvidePlugin({
+      Buffer: ["buffer", "Buffer"],
+    }),
+  ],
 };

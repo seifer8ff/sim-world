@@ -18,7 +18,7 @@ import { Tile } from "./tile";
 import { Color as ColorType } from "rot-js/lib/color";
 import { clamp } from "lodash";
 import { LightManager, RGBAColor } from "./light-manager";
-import { CompositeTilemap } from "@pixi/tilemap";
+import { CompositeTilemap } from "./libs/pixi-tilemap.es";
 
 // handle spawning, updating, and rendering of tree leaves
 export class SystemTreeRenderer {
@@ -52,7 +52,8 @@ export class SystemTreeRenderer {
     game: Game,
     pos: Point
   ): CompositeTilemap {
-    const sprite = new CompositeTilemap();
+    const sprite = new CompositeTilemap(null);
+    console.log("sprite", sprite);
     const spritePos = game.userInterface.camera.TileToScreenCoords(
       pos.x,
       pos.y,

@@ -16,7 +16,6 @@ import { SystemLeaves } from "./system-leaves";
 import { SystemTreeRenderer } from "./system-tree-renderer";
 import { Layer } from "./renderer";
 import { Texture } from "pixi.js";
-import { CompositeTilemap } from "@pixi/tilemap";
 import { Color, RNG } from "rot-js";
 
 export class ManagerShrubs {

@@ -11,7 +11,7 @@ import { SystemLeaves } from "./system-leaves";
 import { SystemTreeRenderer } from "./system-tree-renderer";
 import { Layer } from "./renderer";
 import { Texture } from "pixi.js";
-import { CompositeTilemap } from "@pixi/tilemap";
+import { CompositeTilemap } from "./libs/pixi-tilemap.es";
 import { Color } from "rot-js";
 
 export interface Segment {

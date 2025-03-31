@@ -14,27 +14,6 @@ After cloning the repository:
   npm ci
   ```
 
-- You will need to manually install the shader code:
-  Clone the modified tilemap shader:
-  https://github.com/seifer8ff/tilemap-with-tint/tree/v4.x
-  After clone, switch to feat-tint branch and install dependencies:
-
-  ```powershell
-  cd tilemap-with-tint
-  git checkout feat-tint
-  npm ci
-  ```
-
-  Installing the depencencies also builds the project, readying it for install.
-
-  Navigate back to this repo and run:
-
-  ```powershell
-  npx install-local --save ../tilemap-with-tint
-  ```
-
-  This will install the local shader code into the project properly.
-
 - To build the assets, ensure you're using node v18.20.7 (can be managed easily using NVM) and then run:
 
   ```powershell
@@ -91,3 +70,22 @@ For sprite manipulation:
 - https://wareya.github.io/webtyler/
 
 - https://www.piskelapp.com/
+
+# Regenerating shader code
+
+- Should you need to update the shader code, take the following steps:
+  Clone the modified tilemap shader:
+  https://github.com/seifer8ff/tilemap-with-tint/tree/v4.x
+  After clone, switch to feat-tint branch and install dependencies:
+
+  ```powershell
+  cd tilemap-with-tint
+  git checkout feat-tint
+  npm ci
+  ```
+
+  Installing the depencencies also builds the project, readying it for copy into the sim-world/src/libs/tilemap-with-tint folder.
+
+  Copy all of the files from the dist folder into sim-world/src/libs/tilemap-with-tint
+
+  Repeat the above steps on each update to the shader code.
