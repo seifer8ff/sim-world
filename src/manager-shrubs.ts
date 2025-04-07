@@ -3,6 +3,7 @@ import {
   ActorBase,
   WithPosition,
   WithID,
+  WithCanopy,
 } from "./entities/actor";
 import { TreeSpecies, TreeSpeciesEnum } from "./entities/tree/tree-species";
 import { Game } from "./game";
@@ -10,10 +11,7 @@ import { BiomeId, Biomes } from "./biomes";
 import { Point } from "./point";
 import { World } from "miniplex";
 import { generateId, getNumberFromRange } from "./misc-utility";
-import { Tile, TileSubType, TileType } from "./tile";
-import { SystemBranches } from "./system-branches";
-import { SystemLeaves } from "./system-leaves";
-import { SystemTreeRenderer } from "./system-tree-renderer";
+import { Tile } from "./tile";
 import { Layer } from "./renderer";
 import { Texture } from "pixi.js";
 import { Color, RNG } from "rot-js";
@@ -30,10 +28,10 @@ export class ManagerShrubs {
         name: "Shrub",
         position: pos,
         tile: Tile.shrub.id,
-        subType: TileSubType.Shrub,
-        type: TileType.Plant,
+        layer: Layer.GROUNDCOVER,
+        canGrow: true, // allows the shrub to grow into a tree
       };
-      return this.game.actorManager.spawnActor(actor, Layer.PLANT);
+      return this.game.actorManager.spawnActor(actor, Layer.GROUNDCOVER);
     }
     return null;
   }
@@ -55,12 +53,14 @@ export class ManagerShrubs {
     let growSuccess = false;
     if (!shrub?.position) return growSuccess;
 
+    // collect the positions of all shrubs into a set for easy retrieval
     const positions = new Set<string>();
-    const shrubs = this.game.actorManager.allShrubs;
+    const shrubs = this.game.actorManager.groundCover;
     for (const { position } of shrubs) {
       positions.add(`${position.x},${position.y}`);
     }
 
+    // define the set of directions that constitute a fully grown set of shrubs
     const directions = [
       [new Point(1, 0), new Point(0, 1), new Point(1, 1)],
       [new Point(-1, 0), new Point(0, 1), new Point(-1, 1)],
@@ -68,22 +68,20 @@ export class ManagerShrubs {
       [new Point(-1, 0), new Point(0, -1), new Point(-1, -1)],
     ];
 
+    // check each direction for a fully grown shrub
     for (const directionSet of directions) {
       const { x, y } = shrub.position;
-      const isSquare = directionSet.every((dir) =>
+      const isComplete = directionSet.every((dir) =>
         positions.has(`${x + dir.x},${y + dir.y}`)
       );
 
-      if (isSquare) {
-        // Remove the shrubs and spawn a trunk
-        directionSet.forEach((dir) => {
-          const adjacentPos = new Point(x + dir.x, y + dir.y);
-          const adjacentShrub = this.game.actorManager.getPlantsAt(
-            adjacentPos.x,
-            adjacentPos.y
-          )[0];
-          this.world.remove(adjacentShrub);
-        });
+      // if the direction set is complete, remove a shrub to spawn a tree.
+      if (isComplete) {
+        // spawn tree in place of actively growing shrub
+        this.game.actorManager.treeManager.spawnAt(
+          shrub.position,
+          TreeSpecies.treeSpecies[TreeSpeciesEnum.PINE]
+        );
         this.world.remove(shrub);
         // console.log("--- !!! --- shrub removed to add TREE !!");
 
@@ -99,6 +97,59 @@ export class ManagerShrubs {
         break;
       }
     }
+
+    // public growShrub(shrub: ActorBase): boolean {
+    //   let growSuccess = false;
+    //   if (!shrub?.position) return growSuccess;
+
+    //   const positions = new Set<string>();
+    //   const shrubs = this.game.actorManager.allShrubs;
+    //   for (const { position } of shrubs) {
+    //     positions.add(`${position.x},${position.y}`);
+    //   }
+
+    //   const directions = [
+    //     [new Point(1, 0), new Point(0, 1), new Point(1, 1)],
+    //     [new Point(-1, 0), new Point(0, 1), new Point(-1, 1)],
+    //     [new Point(1, 0), new Point(0, -1), new Point(1, -1)],
+    //     [new Point(-1, 0), new Point(0, -1), new Point(-1, -1)],
+    //   ];
+
+    //   for (const directionSet of directions) {
+    //     const { x, y } = shrub.position;
+    //     const isSquare = directionSet.every((dir) =>
+    //       positions.has(`${x + dir.x},${y + dir.y}`)
+    //     );
+
+    //     if (isSquare) {
+    //       // Remove the shrubs and spawn a trunk
+    //       directionSet.forEach((dir) => {
+    //         const adjacentPos = new Point(x + dir.x, y + dir.y);
+    //         const adjacentShrub = this.game.actorManager.getPlantsAt(
+    //           adjacentPos.x,
+    //           adjacentPos.y
+    //         )[0];
+    //         this.world.remove(adjacentShrub);
+    //       });
+    //       this.game.actorManager.treeManager.spawnAt(
+    //         shrub.position,
+    //         TreeSpecies.treeSpecies[TreeSpeciesEnum.PINE]
+    //       );
+    //       this.world.remove(shrub);
+    //       // console.log("--- !!! --- shrub removed to add TREE !!");
+
+    //       // const trunk = this.world.add({
+    //       //   id: generateId(),
+    //       //   position: shrub.position,
+    //       //   tile: Tile.tree.id,
+    //       //   subType: TileSubType.Tree,
+    //       //   type: TileType.Plant,
+    //       // });
+    //       // this.world.addComponent(trunk, ComponentType.name, "Trunk");
+    //       growSuccess = true;
+    //       break;
+    //     }
+    //   }
 
     if (!growSuccess) {
       // Try to add a shrub to a touching tile
@@ -210,6 +261,6 @@ export class ManagerShrubs {
 
   public drawShrub(shrub: ActorBase): void {
     const { tile, position } = shrub;
-    this.game.renderer.addTileIdToScene(position, Layer.PLANT, tile);
+    this.game.renderer.addTileIdToScene(position, Layer.GROUNDCOVER, tile);
   }
 }

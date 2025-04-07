@@ -158,26 +158,55 @@ export function keyToIndex(key: string, layer: Layer): number {
   return positionToIndex(parseInt(x), parseInt(y), layer);
 }
 
-export function positionToIndex(
-  x: number,
-  y: number,
-  layer: Layer,
-  width: number = GameSettings.options.gameSize.width,
-  height: number = GameSettings.options.gameSize.height
-  // optional width and height params for web workers that can't access GameSettings
-): number {
-  const widthInTiles = width;
-  const heightInTiles = height;
-  const denseWidthInTiles = widthInTiles * Tile.tileDensityRatio;
-  const denseHeightInTiles = heightInTiles * Tile.tileDensityRatio;
-  // Calculate the total number of tiles for each layer
-  const totalLayerTiles = widthInTiles * heightInTiles;
-  const totalDenseLayerTiles = denseWidthInTiles * denseHeightInTiles;
+// export function positionToIndex(
+//   x: number,
+//   y: number,
+//   layer: Layer,
+//   width: number = GameSettings.options.gameSize.width,
+//   height: number = GameSettings.options.gameSize.height
+//   // optional width and height params for web workers that can't access GameSettings
+// ): number {
+//   const widthInTiles = width;
+//   const heightInTiles = height;
+//   const denseWidthInTiles = widthInTiles * Tile.tileDensityRatio;
+//   const denseHeightInTiles = heightInTiles * Tile.tileDensityRatio;
+//   // Calculate the total number of tiles for each layer
+//   const totalLayerTiles = widthInTiles * heightInTiles;
+//   const totalDenseLayerTiles = denseWidthInTiles * denseHeightInTiles;
 
-  // Define base offsets for each layer
-  const layerOffset = (layer - 1) * totalDenseLayerTiles;
-  //
-  return layerOffset + (y * denseWidthInTiles + x);
+//   // Define base offsets for each layer
+//   const layerOffset = (layer - 1) * totalDenseLayerTiles;
+//   //
+//   return layerOffset + (y * denseWidthInTiles + x);
+// }
+
+// export function positionToIndex(
+//   x: number,
+//   y: number,
+//   layer: Layer,
+//   width: number = GameSettings.options.gameSize.width,
+//   height: number = GameSettings.options.gameSize.height
+// ): number {
+//   // Precompute constants
+//   const tileDensityRatio = Tile.tileDensityRatio;
+//   const denseWidthInTiles = width * tileDensityRatio;
+//   const totalDenseLayerTiles = denseWidthInTiles * height * tileDensityRatio;
+
+//   // Calculate the base offset for the layer
+//   const layerOffset = (layer - 1) * totalDenseLayerTiles;
+
+//   // Return the computed index
+//   return layerOffset + y * denseWidthInTiles + x;
+// }
+
+export function positionToIndex(x: number, y: number, layer: Layer): number {
+  const width = GameSettings.options.gameSize.width * Tile.tileDensityRatio;
+  const layerOffset =
+    (layer - 1) *
+    width *
+    GameSettings.options.gameSize.height *
+    Tile.tileDensityRatio;
+  return layerOffset + y * width + x;
 }
 
 export function indexToPosition(

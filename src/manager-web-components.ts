@@ -243,16 +243,9 @@ export class ManagerWebComponents {
   }
 
   public mapEntityToMenuItem(actor: ActorBase): MenuItem {
-    const isAnimated = actor?.animatedTile?.animationKeys != null;
     // use regex to select "mushroom_00_walk_14x18",
     // out of "sprites/mushroom_00_walk_14x18/mushroom_00_walk_14x18.json",
-    let spritePath;
-    if (isAnimated) {
-      // spritePath = animatedTilePathToStatic(entity.tile.spritePath);
-      spritePath = actor.animatedTile.iconPath;
-    } else {
-      spritePath = actor.animatedTile.spritePath;
-    }
+    const spritePath = actor.spritePath;
     return {
       id: `${actor.id}`,
       icon: getCachedTileTexture(spritePath),

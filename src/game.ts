@@ -1,30 +1,24 @@
 import { RNG } from "rot-js/lib/index";
-import { Player } from "./entities/player";
 import { GameState, Stages } from "./game-state";
-import { Tile } from "./tile";
 import { UserInterface } from "./user-interface";
 import { Layer, Renderer } from "./renderer";
 import { MapWorld } from "./map-world";
 import { TimeManager } from "./time-manager";
 import { GeneratorNames } from "./generator-names";
-import { TileStats } from "./web-components/tile-info";
 import Simplex from "rot-js/lib/noise/simplex";
 import Noise from "rot-js/lib/noise/noise";
 import { ManagerAnimation } from "./manager-animation";
-import { ParticleContainer, Sprite, Ticker } from "pixi.js";
-import * as MainLoop from "mainloop.js";
-
+import MainLoop from "mainloop.js";
 import { InitAssets } from "./assets";
 import { GameSettings } from "./game-settings";
 import { ManagerActor } from "./manager-actors";
-import { positionToIndex } from "./misc-utility";
-import { Biomes } from "./biomes";
-import { TreeSpecies } from "./entities/tree/tree-species";
 import { SystemTreeRenderer } from "./system-tree-renderer";
 import { ManagerCollision } from "./manager-collision";
 import { ActorBase } from "./entities/actor";
 import { SystemAnimated } from "./system-animated";
+import { SystemStatic } from "./system-static";
 import { SystemPathfinder } from "./system-pathfinder";
+import { GameSetup } from "./game-setup";
 
 export class Game {
   public settings: GameSettings;
@@ -52,10 +46,10 @@ export class Game {
 
     this.timeManager = new TimeManager(this);
     this.animManager = new ManagerAnimation(this);
-    this.userInterface = new UserInterface(this);
     this.gameState = new GameState();
     this.map = new MapWorld(this);
     this.nameGenerator = new GeneratorNames(this);
+    this.userInterface = new UserInterface(this);
     this.renderer = new Renderer(this);
     this.actorManager = new ManagerActor(this);
     this.collisionManager = new ManagerCollision(this);
@@ -79,22 +73,6 @@ export class Game {
       .setDraw(this.renderLoop.bind(this))
       .setEnd(this.endLoop.bind(this))
       .start();
-  }
-
-  getTerrainTileAt(x: number, y: number): Tile {
-    return this.map.getTile(x, y);
-  }
-
-  getTileInfoAt(x: number, y: number): TileStats {
-    const index = positionToIndex(x, y, Layer.TERRAIN);
-    return {
-      height: this.map.heightMap.get(index),
-      magnetism: this.map.polesMap.magnetismMap.get(index),
-      temperaturePercent: this.map.tempMap.getTempByIndex(index),
-      moisture: this.map.moistureMap.getMoistureByIndex(index),
-      sunlight: this.map.getTotalLight(x, y),
-      biome: Biomes.Biomes[this.map.biomeMap.get(index)],
-    };
   }
 
   public resetGame(): void {
@@ -131,23 +109,15 @@ export class Game {
     }
   }
 
-  private worldSetup(): void {
-    // any initialization that requires the real game loop:
-    //    things like actors moving, tinting of tiles, etc
-    this.actorManager.addInitialActors();
-    for (let i = 0; i < 2; i++) {
-      this.gameLoop();
-    }
-    this.gameState.worldSetupComplete = true;
-  }
-
   private mainLoop(deltaTime: number) {
     if (this.gameState.stage === Stages.Play) {
       if (!this.gameState.worldSetupComplete) {
         // let a few turns pass, do any world setup needed
-        this.worldSetup();
+        const gameSetup = new GameSetup(this);
+        gameSetup.init();
         return;
       }
+      this.uiLoop(deltaTime);
 
       // handle counting down wait time after a turn (like for animation)
       if (this.turnAnimDelayCounter > 0 && !this.timeManager.isPaused) {
@@ -163,14 +133,9 @@ export class Game {
         this.timeManager.resetTurnAnimTime();
       }
     }
-
-    this.uiLoop(deltaTime);
   }
 
-  private gameLoop() {
-    // console.log(
-    //   "----- game loop, turn: " + this.timeManager.currentTurn + " -------"
-    // );
+  public gameLoop() {
     const turn = this.timeManager.currentTurn;
     let actors: ActorBase[] = [];
 
@@ -178,7 +143,6 @@ export class Game {
     while (turn === this.timeManager.currentTurn) {
       actors.push(this.timeManager.nextOnSchedule());
     }
-
     return Promise.all(
       actors.map((actor) => {
         if (actor && actor?.brain) {
@@ -225,7 +189,7 @@ export class Game {
 
       // grow some of the shrubs
       let maxGrowth = 55;
-      for (const shrub of this.actorManager.allShrubs) {
+      for (const shrub of this.actorManager.groundCover) {
         if (maxGrowth <= 0) {
           break;
         }
@@ -235,15 +199,16 @@ export class Game {
       }
 
       // grow all of the trees
-      for (const tree of this.actorManager.allTrees) {
-        this.actorManager.treeManager.growTree(tree);
-      }
+      // for (const tree of this.actorManager.allTrees) {
+      //   // this.actorManager.treeManager.growTree(tree);
+      // }
 
       // clear cache for dynamic layers:
       // - terrain layer's cache is handled at lower level by marking tiles as dirty
       // - entity layer's cache is handled at lower level to allow lerp animations
-      this.renderer.clearCache(Layer.PLANT);
-      // this.renderer.clearCache(Layer.TREE);
+      this.renderer.clearCache(Layer.GROUNDCOVER);
+      this.renderer.clearCache(Layer.SMALLACTOR);
+      this.renderer.clearCache(Layer.CANOPY);
       // this.renderer.clearCache(Layer.UI);
 
       this.map.lightManager.turnUpdate();
@@ -263,77 +228,32 @@ export class Game {
       );
       SystemAnimated.drawAnimated(
         this.actorManager.withAnimator,
-        this.renderer
+        this.renderer,
+        this.userInterface.camera.viewportUnpadded
       );
-      this.drawShrubs();
-      this.drawTrees();
+      SystemStatic.drawTile(this.actorManager.withStaticSprite, this.renderer);
+      SystemTreeRenderer.drawTrunkBase(
+        this.actorManager.withTrunkBase,
+        this.renderer,
+        this.userInterface.camera.viewportUnpadded
+      );
+      SystemTreeRenderer.drawCanopy(
+        this.actorManager.withCanopy,
+        this.renderer,
+        this.userInterface.camera.viewportUnpadded
+      );
+      // this.drawShrubs();
+      // this.drawTrees();
+
+      for (const actor of this.actorManager.allTrees) {
+        // console.log("tree actor", actor);
+      }
+
       //
       // important that this comes last
       // run a tint pass on all actors (entities, trees, etc)
       this.map.lightManager.tintActors(this.actorManager.withAnimator, true);
     });
-  }
-
-  private drawTrees(): void {
-    const viewport = this.userInterface.camera.viewportPadded;
-    const halfWidth = viewport.width / 2;
-    const halfHeight = viewport.height / 2;
-
-    const viewportLeft = viewport.center.x - halfWidth;
-    const viewportRight = viewport.center.x + halfWidth;
-    const viewportTop = viewport.center.y - halfHeight;
-    const viewportBottom = viewport.center.y + halfHeight;
-
-    this.renderer.clearSceneLayer(Layer.TREE);
-
-    for (const tree of this.actorManager.allTrees) {
-      let { x, y } = tree.position;
-      x = Tile.translate(x, Layer.TREE, Layer.TERRAIN);
-      y = Tile.translate(y, Layer.TREE, Layer.TERRAIN);
-
-      // for now, grow all trees
-      // later, implement turn-based growth
-      // this.actorManager.treeManager.growTree(tree);
-      // Check if the tree is within the viewport boundaries
-      if (
-        x >= viewportLeft &&
-        x <= viewportRight &&
-        y >= viewportTop &&
-        y <= viewportBottom
-      ) {
-        this.actorManager.treeManager.drawTree(tree);
-      }
-    }
-  }
-
-  private drawShrubs(): void {
-    const viewport = this.userInterface.camera.viewportPadded;
-    const halfWidth = viewport.width / 2;
-    const halfHeight = viewport.height / 2;
-
-    const viewportLeft = viewport.center.x - halfWidth;
-    const viewportRight = viewport.center.x + halfWidth;
-    const viewportTop = viewport.center.y - halfHeight;
-    const viewportBottom = viewport.center.y + halfHeight;
-
-    // this.renderer.clearSceneLayer(Layer.PLANT);
-
-    for (const shrub of this.actorManager.allShrubs) {
-      // console.log("shrub", shrub);
-      let { x, y } = shrub.position;
-      x = Tile.translate(x, Layer.PLANT, Layer.TERRAIN);
-      y = Tile.translate(y, Layer.PLANT, Layer.TERRAIN);
-
-      // Check if the shrub is within the viewport boundaries
-      if (
-        x >= viewportLeft &&
-        x <= viewportRight &&
-        y >= viewportTop &&
-        y <= viewportBottom
-      ) {
-        this.actorManager.shrubManager.drawShrub(shrub);
-      }
-    }
   }
 
   private renderLoop(interpPercent: number) {
@@ -345,6 +265,10 @@ export class Game {
     this.map.draw();
 
     this.userInterface.camera.renderUpdate(interpPercent);
+
+    let viewport = this.userInterface.camera.viewportUnpadded;
+    let viewportTiles: number[] =
+      this.userInterface.camera.viewportTilesUnpadded;
 
     if (this.gameState.stage === Stages.Play) {
       this.timeManager.renderUpdate(this.turnAnimDelayCounter);
@@ -358,7 +282,7 @@ export class Game {
       }
 
       if (GameSettings.options.toggles.enableGlobalLights) {
-        this.map.lightManager.renderUpdate(interpPercent);
+        this.map.lightManager.renderUpdate(interpPercent, viewportTiles);
       }
 
       if (GameSettings.options.toggles.enableAnimations) {
@@ -370,29 +294,40 @@ export class Game {
     this.userInterface.components.renderUpdate();
 
     if (this.gameState.stage === Stages.Play) {
-      let viewportInTiles = this.userInterface.camera.viewportPadded;
-      this.renderer.renderChunkedLayers(
-        [Layer.TERRAIN],
-        viewportInTiles.width,
-        viewportInTiles.height,
-        viewportInTiles.center
-      );
-      viewportInTiles = this.userInterface.camera.viewportUnpadded;
-      this.renderer.renderChunkedLayers(
-        [Layer.UI, Layer.PLANT, Layer.ENTITY, Layer.UI],
-        viewportInTiles.width,
-        viewportInTiles.height,
-        viewportInTiles.center
-      );
-
-      // this.renderer.renderLayers(
-      //   [Layer.TERRAIN, Layer.ENTITY, Layer.UI],
-      //   viewportInTiles.width,
-      //   viewportInTiles.height,
-      //   viewportInTiles.center.x,
-      //   viewportInTiles.center.y,
-      //   0
+      // console.log(
+      //   viewportTileCount,
+      //   GameSettings.options.hideDenseLayersTileCount
       // );
+      // at lower zoom levels, skip rendering the dense layers to improve performance
+      if (
+        viewportTiles.length > GameSettings.options.hideDenseLayersTileCount
+      ) {
+        this.renderer.clearSceneLayers([
+          Layer.GROUNDCOVER,
+          Layer.SMALLACTOR,
+          Layer.CANOPY,
+        ]);
+        this.renderer.renderChunkedLayers(
+          [Layer.TERRAIN, Layer.ACTOR, Layer.UI],
+          viewport.width,
+          viewport.height,
+          viewport.center
+        );
+      } else {
+        this.renderer.renderChunkedLayers(
+          [
+            Layer.TERRAIN,
+            Layer.GROUNDCOVER,
+            Layer.SMALLACTOR,
+            Layer.ACTOR,
+            Layer.CANOPY,
+            Layer.UI,
+          ],
+          viewport.width,
+          viewport.height,
+          viewport.center
+        );
+      }
     }
 
     if (GameSettings.options.toggles.enableStats) {

@@ -1,43 +1,93 @@
 import { Game } from "../game";
 import { AnimatedSprite, Assets, Texture } from "pixi.js";
 import { GameSettings } from "../game-settings";
-import { ActorBase, WithAnimator } from "../entities/actor";
+import { ActorBase, WithAnimator, WithSprite } from "../entities/actor";
 import { Tile } from "../tile";
 
+// map of animation types to a list of animation names
+export interface AnimationMap {
+  idle: string[]; // every actor should have at least one idle animation
+  walk_up?: string[];
+  walk_down?: string[];
+  walk_left?: string[];
+  walk_right?: string[];
+}
+
+export type BaseAnimationKey =
+  | "idle"
+  | "walk_up"
+  | "walk_down"
+  | "walk_left"
+  | "walk_right";
+
+export const defaultAnimationMap: AnimationMap = {
+  idle: ["right"],
+  walk_up: ["up"],
+  walk_down: ["down"],
+  walk_left: ["left"],
+  walk_right: ["right"],
+};
+
+export const mushroomAnimationMap: AnimationMap = {
+  idle: ["idle"],
+  walk_up: ["idle"],
+  walk_down: ["idle"],
+  walk_left: ["idle"],
+  walk_right: ["idle"],
+};
+
+export const cowAnimationMap: AnimationMap = {
+  idle: ["right"],
+  walk_up: ["walk_up"],
+  walk_down: ["walk_down"],
+  walk_left: ["walk_left"],
+  walk_right: ["walk_right"],
+};
+
 export class Animator {
-  // public animSpeed: number = 1; // set during gameplay to adjust speed (like when time is scaled)
-  private currentAnimation: string;
-  private animationFrames: { [key: string]: string[] }; // frames by key name
+  private currentAnimation: BaseAnimationKey | null;
+  private animationFrames: Record<BaseAnimationKey, string[]>; // frames by key name
 
   constructor(
     private game: Game,
-    private actor: WithAnimator,
+    private actor: WithAnimator & WithSprite,
     private animSpeed: number = 1 // the initial modifier for the anim speed. Set during init and not changed
   ) {
-    this.currentAnimation = "";
-    this.animationFrames = {};
-    const tile = Tile;
-    if (this.actor.animatedTile.animationKeys) {
+    this.currentAnimation = null;
+    this.animationFrames = {
+      idle: [],
+      walk_up: [],
+      walk_down: [],
+      walk_left: [],
+      walk_right: [],
+    };
+
+    if (this.actor.animationPath) {
       const frames: { [key: string]: any } = Assets.cache.get(
-        this.actor.animatedTile.spritePath
+        this.actor.animationPath
       ).data.frames;
 
-      this.animationFrames = {};
-
-      for (let animationKey of this.actor.animatedTile.animationKeys) {
+      const animationMap: AnimationMap = this.actor.animationMap;
+      for (const [animationKey, keys] of Object.entries(animationMap)) {
         this.animationFrames[animationKey] = [];
-        for (let key in frames) {
-          if (key.includes(animationKey)) {
-            this.animationFrames[animationKey].push(key);
+        for (const key of keys) {
+          for (const frameKey in frames) {
+            if (frameKey.includes(key)) {
+              this.animationFrames[animationKey].push(frameKey);
+            }
           }
         }
         this.animationFrames[animationKey].sort();
       }
-      this.setAnimation(this.actor.animatedTile.animationKeys[0]);
+
+      // Set the initial animation to "idle" if it exists
+      if (animationMap.idle && animationMap.idle.length > 0) {
+        this.setAnimation("idle");
+      }
     }
   }
 
-  public setAnimation(animation: string): void {
+  public setAnimation(animation: BaseAnimationKey): void {
     if (this.currentAnimation === animation) return;
 
     this.currentAnimation = animation;
@@ -60,7 +110,37 @@ export class Animator {
   }
 
   public scaleAnimSpeed(timeScale: number) {
-    this.actor.sprite.animationSpeed =
+    if (!this.actor.sprite) {
+      return;
+    }
+    (this.actor.sprite as AnimatedSprite).animationSpeed =
       this.animSpeed * GameSettings.options.animationSpeed * timeScale;
+  }
+
+  public static updateFacing(
+    moveVector: [number, number],
+    animator: Animator
+  ): void {
+    if (moveVector) {
+      // the action involves movement, so update sprite facing
+      switch (moveVector[0]) {
+        case 1:
+          animator.setAnimation("walk_right");
+          break;
+        case -1:
+          animator.setAnimation("walk_left");
+          break;
+        case 0:
+          switch (moveVector[1]) {
+            case 1:
+              animator.setAnimation("walk_down");
+              break;
+            case -1:
+              animator.setAnimation("walk_up");
+              break;
+          }
+          break;
+      }
+    }
   }
 }

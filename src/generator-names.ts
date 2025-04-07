@@ -1,6 +1,5 @@
 import { StringGenerator } from "rot-js";
 import { Game } from "./game";
-import { TileSubType } from "./tile";
 
 export class GeneratorNames {
   private nameGenerator: StringGenerator;
@@ -9,16 +8,16 @@ export class GeneratorNames {
   constructor(private game: Game) {
     this.nameGenerators = {};
     this.nameGenerator = new StringGenerator({ words: true });
-    this.nameGenerators[TileSubType.Animal] = new StringGenerator({
+    this.nameGenerators.animal = new StringGenerator({
       words: true,
     });
-    this.nameGenerators[TileSubType.Human] = new StringGenerator({
+    this.nameGenerators.humanoid = new StringGenerator({
       words: true,
     });
-    this.nameGenerators[TileSubType.Fish] = new StringGenerator({
+    this.nameGenerators.aquatic = new StringGenerator({
       words: true,
     });
-    this.nameGenerators[TileSubType.Bird] = new StringGenerator({
+    this.nameGenerators.flying = new StringGenerator({
       words: true,
     });
     const exampleHumanNames = [
@@ -98,7 +97,7 @@ export class GeneratorNames {
       "Bootsie",
       "Bannana",
     ];
-    const exampleFishNames = [
+    const exampleAquaticNames = [
       "Bubbles",
       "Goldie",
       "Nemo",
@@ -119,7 +118,7 @@ export class GeneratorNames {
       "Pearl",
       "Gurgle",
     ];
-    const exampleBirdNames = [
+    const exampleFlyingNames = [
       "Polly",
       "Pollyanna",
       "Pollywog",
@@ -142,20 +141,22 @@ export class GeneratorNames {
       "Eggie",
     ];
     exampleHumanNames.forEach((name) =>
-      this.nameGenerators[TileSubType.Human].observe(name)
+      this.nameGenerators.humanoid.observe(name)
     );
     exampleAnimalNames.forEach((name) =>
-      this.nameGenerators[TileSubType.Animal].observe(name)
+      this.nameGenerators.animal.observe(name)
     );
-    exampleFishNames.forEach((name) =>
-      this.nameGenerators[TileSubType.Fish].observe(name)
+    exampleAquaticNames.forEach((name) =>
+      this.nameGenerators.aquatic.observe(name)
     );
-    exampleBirdNames.forEach((name) =>
-      this.nameGenerators[TileSubType.Bird].observe(name)
+    exampleFlyingNames.forEach((name) =>
+      this.nameGenerators.flying.observe(name)
     );
   }
 
-  public generate(subType: TileSubType): string {
+  public generate(
+    subType: "aquatic" | "humanoid" | "flying" | "animal"
+  ): string {
     return this.nameGenerators[subType].generate();
   }
 }

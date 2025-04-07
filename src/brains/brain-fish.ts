@@ -13,6 +13,7 @@ import {
 } from "../entities/actor";
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
+import { Animator } from "../components/animator";
 
 export class BrainFish implements Brain {
   action: Action | null;
@@ -110,7 +111,7 @@ export class BrainFish implements Brain {
       .run()
       .then((res: { movementVector: [number, number] }) => {
         // face the sprite/anim to the direction of movement
-        this.updateFacing(res?.movementVector);
+        Animator.updateFacing(res?.movementVector, this.actor.animator);
 
         if (this.goal === this.action) {
           // goal completed, pick a new one next turn
@@ -120,29 +121,5 @@ export class BrainFish implements Brain {
         this.action = null;
         return res;
       });
-  }
-
-  public updateFacing(moveVector: [number, number]): void {
-    if (moveVector) {
-      // the action involves movement, so update sprite facing
-      switch (moveVector[0]) {
-        case 1:
-          this.actor.animator.setAnimation("right");
-          break;
-        case -1:
-          this.actor.animator.setAnimation("left");
-          break;
-        case 0:
-          switch (moveVector[1]) {
-            case 1:
-              this.actor.animator.setAnimation("down");
-              break;
-            case -1:
-              this.actor.animator.setAnimation("up");
-              break;
-          }
-          break;
-      }
-    }
   }
 }

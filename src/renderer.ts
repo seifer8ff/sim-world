@@ -7,17 +7,16 @@ import { Color as ColorType } from "rot-js/lib/color";
 import { MapWorld } from "./map-world";
 export enum Layer {
   TERRAIN = 1,
-  GROUNDFX,
-  ENTITY,
-  PLANT,
-  TREE,
+  GROUNDCOVER, // small ground cover plants, small rocks/decorations, weather, puddles, paths, etc
+  ACTOR, // anything that has a brain and a position, including animals, humanoids, plants, etc
+  SMALLACTOR, // small actors, like trees, rats, etc
+  CANOPY, // upper layer, tree canopy, roofs, etc
   UI,
 }
 import { CompositeTilemap, settings } from "./libs/pixi-tilemap.es";
 import { GameSettings } from "./game-settings";
-import { inverseLerp, lerp, positionToIndex } from "./misc-utility";
+import { positionToIndex } from "./misc-utility";
 import { RGBAColor } from "./light-manager";
-import { clamp } from "rot-js/lib/util";
 
 export type Renderable =
   | PIXI.Sprite
@@ -26,19 +25,40 @@ export type Renderable =
   | CompositeTilemap;
 
 export class Renderer {
-  public chunkCountPerSide = 3; // must be ODD number
-  // 3x3 grid of tilemaps to render the terrain
   public terrainLayer = Array.from(
-    { length: this.chunkCountPerSide * this.chunkCountPerSide },
+    {
+      length:
+        GameSettings.options.renderChunkCount *
+        GameSettings.options.renderChunkCount,
+    },
     () => new CompositeTilemap(null)
   );
-  public groundFXLayer = new PIXI.Container();
-  public plantLayer = Array.from(
-    { length: this.chunkCountPerSide * this.chunkCountPerSide },
+  public canopyLayer = Array.from(
+    {
+      length:
+        GameSettings.options.renderChunkCount *
+        GameSettings.options.renderChunkCount,
+    },
     () => new CompositeTilemap(null)
   );
-  public treeLayer = new PIXI.Container();
-  public entityLayer = new PIXI.Container();
+  public groundCoverLayer = Array.from(
+    {
+      length:
+        GameSettings.options.renderChunkCount *
+        GameSettings.options.renderChunkCount,
+    },
+    () => new CompositeTilemap(null)
+  );
+  public smallActorLayer = Array.from(
+    {
+      length:
+        GameSettings.options.renderChunkCount *
+        GameSettings.options.renderChunkCount,
+    },
+    () => new CompositeTilemap(null)
+  );
+  // public smallActorLayer = new PIXI.Container();
+  public actorLayer = new PIXI.Container();
   public uiLayer = new PIXI.Container();
   private spriteCache: Map<number, Renderable> = new Map();
   private spriteIndexCache: Int32Array = new Int32Array(0);
@@ -54,39 +74,52 @@ export class Renderer {
       const tileScale = Math.ceil(Tile.size / Tile.terrainTilePixelSize);
       layer.scale.set(tileScale); // scale up from 16px to Tile.size (32px)
     });
-    this.groundFXLayer.zIndex = 20;
-    this.plantLayer.forEach((layer) => {
+    this.canopyLayer.forEach((layer) => {
+      layer.zIndex = 125;
+      // layer.alpha = 0.1;
+    });
+    this.groundCoverLayer.forEach((layer) => {
       layer.zIndex = 35;
     });
-    this.treeLayer.zIndex = 55;
-    this.treeLayer.sortableChildren = true;
-    this.entityLayer.zIndex = 45;
+    this.smallActorLayer.forEach((layer) => {
+      layer.zIndex = 55;
+    });
+    this.actorLayer.zIndex = 90;
     this.uiLayer.zIndex = 10;
   }
 
   public init(): void {
     this.clearScene();
     this.clearCache();
-    const layerCount = Layer.UI + 1;
+    const layerCount = Layer.UI;
     let layerSize =
       GameSettings.options.gameSize.width *
       Tile.tileDensityRatio *
       GameSettings.options.gameSize.height *
       Tile.tileDensityRatio; // account for dense grid, like for plants
-    layerSize *= layerCount; // account for each layer
-    this.spriteIndexCache = new Int32Array(layerSize).fill(-1);
+    let totalSize = layerSize * layerCount; // account for each layer
+    console.log(
+      "total tile size across all layers, single",
+      totalSize,
+      layerSize
+    );
+    this.spriteIndexCache = new Int32Array(totalSize).fill(-1);
   }
 
   addLayersToStage(stage: PIXI.Container): void {
     this.terrainLayer.forEach((layer, index) => {
       stage.addChild(layer as PIXI.DisplayObject);
     });
-    stage.addChild(this.groundFXLayer as PIXI.DisplayObject);
-    this.plantLayer.forEach((layer, index) => {
+    this.canopyLayer.forEach((layer, index) => {
       stage.addChild(layer as PIXI.DisplayObject);
     });
-    stage.addChild(this.treeLayer as PIXI.DisplayObject);
-    stage.addChild(this.entityLayer as PIXI.DisplayObject);
+    this.groundCoverLayer.forEach((layer, index) => {
+      stage.addChild(layer as PIXI.DisplayObject);
+    });
+    this.smallActorLayer.forEach((layer, index) => {
+      stage.addChild(layer as PIXI.DisplayObject);
+    });
+    stage.addChild(this.actorLayer as PIXI.DisplayObject);
     stage.addChild(this.uiLayer as PIXI.DisplayObject);
   }
 
@@ -96,42 +129,97 @@ export class Renderer {
     height: number,
     viewportCenterTile: Point
   ) {
-    const chunkWidthTiles = Math.ceil(width / this.chunkCountPerSide);
-    const chunkHeightTiles = Math.ceil(height / this.chunkCountPerSide);
-    let clearTerrainLayer = false;
-    let clearPlantLayer = false;
+    const chunkWidthTiles = Math.ceil(
+      width / GameSettings.options.renderChunkCount
+    );
+    const chunkHeightTiles = Math.ceil(
+      height / GameSettings.options.renderChunkCount
+    );
+    // let clearTerrainLayer = false;
+    // let clearGroundCoverLayer = false;
+    // let clearSmallActorLayer = false;
+    // let clearCanopyLayer = false;
 
     for (let layer of layers) {
-      switch (layer) {
-        case Layer.TERRAIN:
-          clearTerrainLayer = true;
-          break;
-        case Layer.PLANT:
-          clearPlantLayer = true;
-          break;
-        case Layer.TREE:
-          break;
-        default:
-          this.clearSceneLayer(layer);
-          break;
-      }
+      this.clearSceneLayer(layer);
+      // switch (layer) {
+      //   case Layer.TERRAIN:
+      //     clearTerrainLayer = true;
+      //     break;
+      //   case Layer.GROUNDCOVER:
+      //     clearGroundCoverLayer = true;
+      //     break;
+      //   case Layer.SMALLACTOR:
+      //     clearSmallActorLayer = true;
+      //     break;
+      //   case Layer.CANOPY:
+      //     clearCanopyLayer = true;
+      //     break;
+      //   default:
+      //     this.clearSceneLayer(layer);
+      //     break;
+      // }
     }
 
-    const centerChunk = Math.floor(this.chunkCountPerSide / 2);
+    const centerChunk = Math.floor(GameSettings.options.renderChunkCount / 2);
+    let chunkIndex = 0;
     for (let i = -centerChunk; i <= centerChunk; i++) {
       for (let j = -centerChunk; j <= centerChunk; j++) {
         // calculate chunkIndex where [-1,-1] is 0 and [2,2] is 9
-        const chunkIndex =
-          (i + centerChunk) * this.chunkCountPerSide + (j + centerChunk);
+        chunkIndex =
+          (i + centerChunk) * GameSettings.options.renderChunkCount +
+          (j + centerChunk);
 
-        // clear just this chunk of terrain layer (BUT NO OTHER LAYERS)
-        if (clearTerrainLayer) {
-          this.clearSceneLayer(Layer.TERRAIN, chunkIndex);
-        }
+        // // clear just this chunk of terrain layer (BUT NO OTHER LAYERS)
+        // if (clearTerrainLayer) {
+        //   this.clearSceneLayer(Layer.TERRAIN, 1);
+        // }
 
-        if (clearPlantLayer) {
-          this.clearSceneLayer(Layer.PLANT, chunkIndex);
-        }
+        // if (clearGroundCoverLayer) {
+        //   this.clearSceneLayer(Layer.GROUNDCOVER, 1);
+        // }
+
+        // if (clearSmallActorLayer) {
+        //   this.clearSceneLayer(Layer.SMALLACTOR, 1);
+        // }
+
+        // if (clearCanopyLayer) {
+        //   this.clearSceneLayer(Layer.CANOPY, 1);
+        // }
+
+        // const centerLayerTypes = [
+        //   Layer.ACTOR,
+        //   Layer.SMALLACTOR,
+        //   Layer.CANOPY,
+        //   Layer.GROUNDCOVER,
+        // ];
+
+        // const centerLayers = layers.filter((layer) =>
+        //   centerLayerTypes.includes(layer)
+        // );
+        // const outerLayers = layers.filter(
+        //   (layer) => !centerLayerTypes.includes(layer)
+        // );
+
+        // if (i === 0 && j === 0) {
+        //   this.renderLayers(
+        //     layers,
+        //     chunkWidthTiles,
+        //     chunkHeightTiles,
+        //     viewportCenterTile.x + i * chunkWidthTiles,
+        //     viewportCenterTile.y + j * chunkHeightTiles,
+        //     chunkIndex
+        //   );
+        // } else {
+        //   this.renderLayers(
+        //     outerLayers,
+        //     chunkWidthTiles,
+        //     chunkHeightTiles,
+        //     viewportCenterTile.x + i * chunkWidthTiles,
+        //     viewportCenterTile.y + j * chunkHeightTiles,
+        //     chunkIndex
+        //   );
+        // }
 
         this.renderLayers(
           layers,
@@ -141,6 +229,15 @@ export class Renderer {
           viewportCenterTile.y + j * chunkHeightTiles,
           chunkIndex
         );
+
+        // this.renderLayers(
+        //   layers,
+        //   chunkWidthTiles,
+        //   chunkHeightTiles,
+        //   viewportCenterTile.x + i * chunkWidthTiles,
+        //   viewportCenterTile.y + j * chunkHeightTiles,
+        //   chunkIndex
+        // );
       }
     }
   }
@@ -152,105 +249,162 @@ export class Renderer {
     chunkIndex: number = -1,
     tint: RGBAColor | string | undefined = undefined
   ) {
-    // need to convert tileX, tileY to the correct index for the layer
-    let index = positionToIndex(tileX, tileY, layer);
+    // Convert tileX, tileY to the correct index for the layer
+    const index = positionToIndex(tileX, tileY, layer);
 
-    if (index < 0) {
-      // invalid index returned
-      return;
-    }
-    // if (layer === Layer.PLANT && tileX % 2 !== 0) {
-    //   console.throttle(20).log(tileX, tileY, index);
-    // }
-    let tileID: number;
-    let tile: Tile;
-    let displayObj: Renderable;
+    let tileTexture: PIXI.Texture | undefined = undefined;
+    let displayObj: Renderable | undefined;
 
     switch (layer) {
-      case Layer.TERRAIN: {
-        tileID = this.spriteIndexCache[index];
-        tile = Tile.tiles[tileID];
-
-        this.terrainLayer[chunkIndex].tile(
-          tile.spritePath,
-          Math.floor(
-            tileX * (Tile.size / this.terrainLayer[chunkIndex].scale.x) -
-              Tile.size / this.terrainLayer[chunkIndex].scale.x / 2
-          ), // half size as layer is scaled up by 2
-          Math.floor(
-            tileY * (Tile.size / this.terrainLayer[chunkIndex].scale.y) -
-              Tile.size / this.terrainLayer[chunkIndex].scale.x / 2
-          ),
-          { alpha: 1, tint: tint as RGBAColor }
-        );
-        break;
-      }
-      case Layer.GROUNDFX: {
+      case Layer.ACTOR: {
         displayObj = this.spriteCache.get(index);
-        if (!displayObj) {
-          return;
-        }
-        // this.tintObjectWithChildren(displayObj, new Point(x, y));
-        this.groundFXLayer.addChild(displayObj as PIXI.DisplayObject);
-        break;
-      }
-      case Layer.PLANT: {
-        tileID = this.spriteIndexCache[index];
+        if (!displayObj) return;
 
-        if (tileID === -1) {
-          return;
-        }
-        tile = Tile.tiles[tileID];
-        // if (tileX % 2 !== 0) {
-        //   console.throttle(20).log(tileID, index, tile);
-        // }
+        this.actorLayer.addChild(displayObj as PIXI.DisplayObject);
+        break;
+      }
 
-        if (!tile) {
-          return;
-        }
-        // if (tileX > 500) {
-        //   console.log("!!!! ---- should render", tileX);
-        // }
-        this.plantLayer[chunkIndex].tile(
-          tile.spritePath,
-          Math.floor(tileX * Tile.denseSize - Tile.size / 2), // half size as layer is scaled up by 2
-          Math.floor(tileY * Tile.denseSize - Tile.size / 2),
-          {
-            alpha: 1,
-            tint: tint as RGBAColor,
-          }
-        );
-        break;
-      }
-      case Layer.TREE: {
-        displayObj = this.spriteCache.get(index);
-        if (!displayObj) {
-          return;
-        }
-        // console.log("tree displayObj", displayObj);
-
-        // displayObj.zIndex = GameSettings.options.gameSize.height * ratio - y;
-        this.treeLayer.addChild(displayObj as PIXI.DisplayObject);
-        break;
-      }
-      case Layer.ENTITY: {
-        displayObj = this.spriteCache.get(index);
-        if (!displayObj) {
-          return;
-        }
-        this.entityLayer.addChild(displayObj as PIXI.DisplayObject);
-        break;
-      }
       case Layer.UI: {
         displayObj = this.spriteCache.get(index);
-        if (!displayObj) {
-          return;
-        }
+        if (!displayObj) return;
+
         this.uiLayer.addChild(displayObj as PIXI.DisplayObject);
         break;
       }
     }
+
+    // Pre-calculate common values to avoid redundant calculations
+    const tileSize = Tile.size;
+    const denseSize = Tile.denseSize;
+    const halfTileSize = Tile.size / 2;
+    const tileID = this.spriteIndexCache[index];
+
+    if (tileID === -1) {
+      return;
+    }
+
+    switch (layer) {
+      case Layer.TERRAIN: {
+        tileTexture = Tile.textures[tileID];
+        if (!tileTexture) return;
+
+        const terrainLayer = this.terrainLayer[chunkIndex];
+        const scaleX = terrainLayer.scale.x;
+        const scaleY = terrainLayer.scale.y;
+
+        terrainLayer.tile(
+          tileTexture,
+          Math.floor(tileX * (tileSize / scaleX) - halfTileSize / scaleX),
+          Math.floor(tileY * (tileSize / scaleY) - halfTileSize / scaleY),
+          { alpha: 1, tint: tint as RGBAColor }
+        );
+        break;
+      }
+
+      case Layer.GROUNDCOVER: {
+        tileTexture = Tile.textures[tileID];
+        if (!tileTexture) return;
+
+        this.groundCoverLayer[chunkIndex].tile(
+          tileTexture,
+          Math.floor(tileX * denseSize - halfTileSize),
+          Math.floor(tileY * denseSize - halfTileSize),
+          { alpha: 1, tint: tint as RGBAColor }
+        );
+        break;
+      }
+
+      case Layer.SMALLACTOR: {
+        tileTexture = Tile.textures[tileID];
+        if (!tileTexture) return;
+
+        this.smallActorLayer[chunkIndex].tile(
+          tileTexture,
+          Math.floor(tileX * denseSize - halfTileSize),
+          Math.floor(tileY * denseSize - halfTileSize),
+          { alpha: 1, tint: tint as RGBAColor }
+        );
+        break;
+      }
+
+      case Layer.CANOPY: {
+        tileTexture = Tile.textures[tileID];
+        if (!tileTexture) return;
+
+        this.canopyLayer[chunkIndex].tile(
+          tileTexture,
+          Math.floor(tileX * denseSize - halfTileSize) - 13,
+          Math.floor(tileY * denseSize - halfTileSize) - 64,
+          { alpha: 0.9, tint: tint as RGBAColor }
+        );
+        break;
+      }
+    }
   }
+
+  // renderLayers(
+  //   layers: Layer[],
+  //   width: number,
+  //   height: number,
+  //   centerX: number,
+  //   centerY: number,
+  //   chunkIndex: number
+  // ): void {
+  //   const shouldTint = GameSettings.shouldTint();
+  //   let right: number;
+  //   let bottom: number;
+  //   let left: number;
+  //   let top: number;
+  //   let tint: RGBAColor | string | undefined = undefined;
+  //   let gameWidth: number = GameSettings.options.gameSize.width;
+  //   let gameHeight: number = GameSettings.options.gameSize.height;
+  //   let tileX: number;
+  //   let tileY: number;
+
+  //   right = Math.ceil(centerX + width / 2);
+  //   bottom = Math.ceil(centerY + height / 2);
+  //   left = Math.ceil(centerX - width / 2);
+  //   top = Math.ceil(centerY - height / 2);
+
+  //   right = Math.max(Math.min(gameWidth, right), 0);
+  //   bottom = Math.max(Math.min(gameHeight, bottom), 0);
+  //   left = Math.min(right, Math.max(0, left));
+  //   top = Math.min(bottom, Math.max(0, top));
+  //   for (let x = left; x < right; x += 1) {
+  //     for (let y = top; y < bottom; y += 1) {
+  //       for (let layer of layers) {
+  //         if (shouldTint) {
+  //           if (layer === Layer.TERRAIN || layer === Layer.GROUNDCOVER) {
+  //             // other layers are tinted in a separate step during the game loop
+  //             // for perf reasons
+  //             tint = this.game.map.lightManager.getRGBALightFor(x, y, false);
+  //           }
+  //           if (layer === Layer.SMALLACTOR || layer === Layer.CANOPY) {
+  //             tint = this.game.map.lightManager.getRGBALightFor(x, y, true);
+  //           }
+  //         }
+
+  //         tileX = x;
+  //         tileY = y;
+  //         if (
+  //           layer === Layer.GROUNDCOVER ||
+  //           layer === Layer.SMALLACTOR ||
+  //           layer === Layer.CANOPY
+  //         ) {
+  //           tileX = Tile.translate(x, Layer.TERRAIN, Layer.GROUNDCOVER);
+  //           tileY = Tile.translate(y, Layer.TERRAIN, Layer.GROUNDCOVER);
+  //           for (let i = 0; i < Tile.tileDensityRatio; i++) {
+  //             for (let j = 0; j < Tile.tileDensityRatio; j++) {
+  //               this.renderLayer(layer, tileX + i, tileY + j, chunkIndex, tint);
+  //             }
+  //           }
+  //         } else {
+  //           this.renderLayer(layer, tileX, tileY, chunkIndex, tint);
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 
   renderLayers(
     layers: Layer[],
@@ -261,41 +415,53 @@ export class Renderer {
     chunkIndex: number
   ): void {
     const shouldTint = GameSettings.shouldTint();
-    let right: number;
-    let bottom: number;
-    let left: number;
-    let top: number;
-    let tint: RGBAColor | string | undefined = undefined;
-    let gameWidth: number = GameSettings.options.gameSize.width;
-    let gameHeight: number = GameSettings.options.gameSize.height;
-    let tileX: number;
-    let tileY: number;
+    const gameWidth = GameSettings.options.gameSize.width;
+    const gameHeight = GameSettings.options.gameSize.height;
 
-    right = Math.ceil(centerX + width / 2);
-    bottom = Math.ceil(centerY + height / 2);
-    left = Math.ceil(centerX - width / 2);
-    top = Math.ceil(centerY - height / 2);
+    let right = Math.ceil(centerX + width / 2);
+    let bottom = Math.ceil(centerY + height / 2);
+    let left = Math.ceil(centerX - width / 2);
+    let top = Math.ceil(centerY - height / 2);
 
     right = Math.max(Math.min(gameWidth, right), 0);
     bottom = Math.max(Math.min(gameHeight, bottom), 0);
     left = Math.min(right, Math.max(0, left));
     top = Math.min(bottom, Math.max(0, top));
-    for (let x = left; x < right; x += 1) {
-      for (let y = top; y < bottom; y += 1) {
-        for (let layer of layers) {
+
+    let x: number, y: number, layer: Layer, tileX: number, tileY: number;
+    let tint: RGBAColor | undefined = undefined;
+
+    for (x = left; x < right; x++) {
+      for (y = top; y < bottom; y++) {
+        for (layer of layers) {
           if (shouldTint) {
-            if (layer === Layer.TERRAIN || layer === Layer.PLANT) {
-              // other layers are tinted in a separate step during the game loop
-              // for perf reasons
-              tint = this.game.map.lightManager.getRGBALightFor(x, y, false);
+            if (layer === Layer.TERRAIN || layer === Layer.GROUNDCOVER) {
+              tint = this.game.map.lightManager.getLightFor(
+                x,
+                y,
+                false,
+                true
+              ) as RGBAColor;
+            } else if (layer === Layer.SMALLACTOR || layer === Layer.CANOPY) {
+              tint = this.game.map.lightManager.getLightFor(
+                x,
+                y,
+                true,
+                true
+              ) as RGBAColor;
             }
           }
 
           tileX = x;
           tileY = y;
-          if (layer === Layer.PLANT || layer === Layer.TREE) {
-            tileX = Tile.translate(x, Layer.TERRAIN, Layer.PLANT);
-            tileY = Tile.translate(y, Layer.TERRAIN, Layer.PLANT);
+
+          if (
+            layer === Layer.GROUNDCOVER ||
+            layer === Layer.SMALLACTOR ||
+            layer === Layer.CANOPY
+          ) {
+            tileX = Tile.translate(x, Layer.TERRAIN, Layer.GROUNDCOVER);
+            tileY = Tile.translate(y, Layer.TERRAIN, Layer.GROUNDCOVER);
             for (let i = 0; i < Tile.tileDensityRatio; i++) {
               for (let j = 0; j < Tile.tileDensityRatio; j++) {
                 this.renderLayer(layer, tileX + i, tileY + j, chunkIndex, tint);
@@ -336,11 +502,21 @@ export class Renderer {
       displayObj instanceof PIXI.AnimatedSprite;
 
     switch (layer) {
-      case Layer.TREE:
-      case Layer.PLANT:
+      case Layer.SMALLACTOR:
+        if (isSprite) {
+          (displayObj as PIXI.Sprite).anchor.set(0.5);
+        }
+        (displayObj as PIXI.Sprite).position.x = position.x * Tile.denseSize;
+        (displayObj as PIXI.Sprite).position.y = position.y * Tile.denseSize;
+      case Layer.GROUNDCOVER:
+        if (isSprite) {
+          (displayObj as PIXI.Sprite).anchor.set(0.5);
+        }
+        (displayObj as PIXI.Sprite).position.x = position.x * Tile.denseSize;
+        (displayObj as PIXI.Sprite).position.y = position.y * Tile.denseSize;
       case Layer.TERRAIN:
         break;
-      case Layer.GROUNDFX: {
+      case Layer.CANOPY: {
         if (isSprite) {
           (displayObj as PIXI.Sprite).anchor.set(0.5);
         }
@@ -357,7 +533,7 @@ export class Renderer {
         (displayObj as PIXI.Sprite).position.y = position.y * Tile.size;
         break;
       }
-      case Layer.ENTITY: {
+      case Layer.ACTOR: {
         if (isSprite) {
           (displayObj as PIXI.Sprite).anchor.set(0.5);
         }
@@ -372,9 +548,9 @@ export class Renderer {
     }
 
     switch (layer) {
-      case Layer.TREE:
-        this.treeLayer.addChild(displayObj as PIXI.DisplayObject);
-        break;
+      // case Layer.SMALLACTOR:
+      //   this.smallActorLayer.addChild(displayObj as PIXI.DisplayObject);
+      //   break;
       default:
         let index = positionToIndex(position.x, position.y, layer);
         this.spriteCache.set(index, displayObj);
@@ -425,15 +601,15 @@ export class Renderer {
       return;
     }
     switch (layer) {
-      case Layer.PLANT:
+      case Layer.GROUNDCOVER:
       case Layer.TERRAIN:
         break;
-      case Layer.GROUNDFX: {
-        this.groundFXLayer.removeChild(cachedObj as PIXI.DisplayObject);
+      case Layer.CANOPY: {
+        // this.canopyLayer.removeChild(cachedObj as PIXI.DisplayObject);
         break;
       }
-      case Layer.ENTITY: {
-        this.entityLayer.removeChild(cachedObj as PIXI.DisplayObject);
+      case Layer.ACTOR: {
+        this.actorLayer.removeChild(cachedObj as PIXI.DisplayObject);
       }
       case Layer.UI: {
         this.uiLayer.removeChild(cachedObj as PIXI.DisplayObject);
@@ -454,7 +630,12 @@ export class Renderer {
       const totalTiles = widthInTiles * heightInTiles;
       const start = (layer - 1) * totalTiles;
       const end = layer * totalTiles;
-      if (layer === Layer.TERRAIN || layer === Layer.PLANT) {
+      if (
+        layer === Layer.TERRAIN ||
+        layer === Layer.GROUNDCOVER ||
+        layer === Layer.SMALLACTOR ||
+        layer === Layer.CANOPY
+      ) {
         // terrain and plant layers are tilemaps and use the spriteIndexCache
         this.spriteIndexCache.fill(-1, start, end);
       } else {
@@ -465,18 +646,18 @@ export class Renderer {
         }
       }
     } else if (!layer) {
-      this.clearCache(Layer.PLANT);
-      this.clearCache(Layer.TREE);
+      this.clearCache(Layer.GROUNDCOVER);
+      this.clearCache(Layer.SMALLACTOR);
       this.clearCache(Layer.UI);
     }
   }
 
   clearScene(): void {
     this.clearSceneLayer(Layer.TERRAIN);
-    this.clearSceneLayer(Layer.GROUNDFX);
-    this.clearSceneLayer(Layer.PLANT);
-    this.clearSceneLayer(Layer.TREE);
-    this.clearSceneLayer(Layer.ENTITY);
+    this.clearSceneLayer(Layer.CANOPY);
+    this.clearSceneLayer(Layer.GROUNDCOVER);
+    this.clearSceneLayer(Layer.SMALLACTOR);
+    this.clearSceneLayer(Layer.ACTOR);
     this.clearSceneLayer(Layer.UI);
   }
 
@@ -498,29 +679,38 @@ export class Renderer {
         }
         break;
       }
-      case Layer.GROUNDFX: {
-        this.groundFXLayer.removeChildren();
-        break;
-      }
-      case Layer.PLANT: {
+      case Layer.CANOPY: {
         if (chunkIndex >= 0) {
-          this.plantLayer[chunkIndex].clear();
+          this.canopyLayer[chunkIndex].clear();
         } else {
-          this.plantLayer.forEach((layer) => {
+          this.canopyLayer.forEach((layer) => {
             layer.clear();
           });
         }
         break;
       }
-      case Layer.TREE: {
-        // this.treeLayer.removeChildren();
-        this.treeLayer.children.forEach((child) => {
-          (child as CompositeTilemap).clear();
-        });
+      case Layer.GROUNDCOVER: {
+        if (chunkIndex >= 0) {
+          this.groundCoverLayer[chunkIndex].clear();
+        } else {
+          this.groundCoverLayer.forEach((layer) => {
+            layer.clear();
+          });
+        }
         break;
       }
-      case Layer.ENTITY: {
-        this.entityLayer.removeChildren();
+      case Layer.SMALLACTOR: {
+        if (chunkIndex >= 0) {
+          this.smallActorLayer[chunkIndex].clear();
+        } else {
+          this.smallActorLayer.forEach((layer) => {
+            layer.clear();
+          });
+        }
+        break;
+      }
+      case Layer.ACTOR: {
+        this.actorLayer.removeChildren();
       }
       case Layer.UI: {
         this.uiLayer.removeChildren();

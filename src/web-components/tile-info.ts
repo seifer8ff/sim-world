@@ -165,11 +165,8 @@ export class TileInfo extends HTMLElement {
       : "translateY(100%)";
   }
 
-  // build the content of the tile info card
-  // called when changing targets
   public setContent(target: PointerTarget): void {
-    console.log("set content", target);
-    // console.log("set content to", target);
+    // console.log("set tile info content to", target);
     this.target = target;
     if (target == null) {
       // hide the tile info as a simplistic way to clear it
@@ -178,38 +175,29 @@ export class TileInfo extends HTMLElement {
       return;
     }
 
-    this.container.style.display = "flex";
-
-    let cachedSprite: CachedTexture;
-    console.log("target.target", target.target);
-
-    if (isActor(target.target)) {
-      const isAnimated = target.target.animatedTile.animationKeys != null;
-      let spritePath;
-      this.label.textContent = `${target.target.name}`;
-
-      if (isAnimated) {
-        spritePath = target.target.animatedTile.iconPath;
-      } else {
-        // spritePath = target.target.tile.spritePath;
-        spritePath = Tile.tiles[target.target.tile].spritePath;
-      }
-      cachedSprite = getCachedTileTexture(spritePath);
-      this.avatar.style.transform =
-        "translateX(25%) translateY(25%) scale(1.5)";
-    }
+    let spritePath: string;
 
     if (target.target instanceof Tile) {
       const biome = Biomes.Biomes[target.target.biomeId];
       this.label.textContent = `${biome.name}`;
-      cachedSprite = getCachedTileTexture(target.target.spritePath);
+      spritePath = target.target.spritePath;
       this.avatar.style.transform = "translateX(0%) translateY(0%) scale(1)";
+    } else {
+      // tile is an actor, which has an icon (to support animated tiles)
+      this.label.textContent = `${target.target.name}`;
+      this.avatar.style.transform =
+        "translateX(25%) translateY(25%) scale(1.5)";
+
+      spritePath = target.target.spritePath;
     }
 
+    this.container.style.display = "flex";
     this.avatar.style.width = "16px";
     this.avatar.style.height = "16px";
     this.avatar.style.backgroundRepeat = "no-repeat";
     this.avatar.style.imageRendering = "pixelated";
+
+    const cachedSprite = getCachedTileTexture(spritePath);
     if (cachedSprite) {
       this.avatar.style.backgroundImage = `url(${cachedSprite.url})`;
       this.avatar.style.backgroundPositionX = `-${cachedSprite.xOffset}px`;
@@ -219,6 +207,61 @@ export class TileInfo extends HTMLElement {
     this.setBodyContent(target);
     this.setVisible(true);
   }
+
+  // // build the content of the tile info card
+  // // called when changing targets
+  // public setContent(target: PointerTarget): void {
+  //   // console.log("set content to", target);
+  //   this.target = target;
+  //   if (target == null) {
+  //     // hide the tile info as a simplistic way to clear it
+  //     // it gets unhidden when the target changes
+  //     this.setVisible(false);
+  //     return;
+  //   }
+
+  //   this.container.style.display = "flex";
+
+  //   let cachedSprite: CachedTexture;
+  //   console.log("target.target", target.target);
+
+  //   if (isActor(target.target)) {
+  //     const isAnimated = target.target.animatedTile.animationKeys != null;
+  //     let spritePath;
+  //     this.label.textContent = `${target.target.name}`;
+
+  //     if (isAnimated) {
+  //       spritePath = target.target.animatedTile.iconPath;
+  //     } else {
+  //       // spritePath = target.target.tile.spritePath;
+  //       // spritePath = Tile.tiles[target.target.tile].spritePath;
+  //       spritePath = Tile.tileSpritePaths[target.target.tile];
+  //     }
+  //     cachedSprite = getCachedTileTexture(spritePath);
+  //     this.avatar.style.transform =
+  //       "translateX(25%) translateY(25%) scale(1.5)";
+  //   }
+
+  //   if (target.target instanceof Tile) {
+  //     const biome = Biomes.Biomes[target.target.biomeId];
+  //     this.label.textContent = `${biome.name}`;
+  //     cachedSprite = getCachedTileTexture(target.target.spritePath);
+  //     this.avatar.style.transform = "translateX(0%) translateY(0%) scale(1)";
+  //   }
+
+  //   this.avatar.style.width = "16px";
+  //   this.avatar.style.height = "16px";
+  //   this.avatar.style.backgroundRepeat = "no-repeat";
+  //   this.avatar.style.imageRendering = "pixelated";
+  //   if (cachedSprite) {
+  //     this.avatar.style.backgroundImage = `url(${cachedSprite.url})`;
+  //     this.avatar.style.backgroundPositionX = `-${cachedSprite.xOffset}px`;
+  //     this.avatar.style.backgroundPositionY = `-${cachedSprite.yOffset}px`;
+  //   }
+
+  //   this.setBodyContent(target);
+  //   this.setVisible(true);
+  // }
 
   // only called when changing targets
   public setBodyContent(target: PointerTarget) {

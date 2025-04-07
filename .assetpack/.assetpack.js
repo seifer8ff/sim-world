@@ -26,6 +26,7 @@ export default {
       texturePacker: {
         removeFileExtension: true,
         extrude: 2,
+        allowRotation: false,
       },
     }),
     manifest: pixiManifest({

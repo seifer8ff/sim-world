@@ -27,10 +27,10 @@ export class Description {
       icon: PinIcon,
       content: `${this.actor.position.x}, ${this.actor.position.y}`,
     });
-    descriptionBlocks.push({
-      icon: TypeIcon,
-      content: this.actor.subType,
-    });
+    // descriptionBlocks.push({
+    //   icon: TypeIcon,
+    //   content: this.actor.subType,
+    // });
     descriptionBlocks.push({
       icon: GoalIcon,
       content: this.actor.brain?.goal?.name || "-",

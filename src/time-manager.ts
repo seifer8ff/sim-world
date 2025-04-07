@@ -82,6 +82,10 @@ export class TimeManager {
     return this.scheduler.add(actor, repeat, initialTimeDelay);
   }
 
+  public removeFromSchedule(actor: ActorBase): void {
+    this.scheduler.remove(actor);
+  }
+
   public renderUpdate(remainingAnimDelay: number) {
     this.calculateTurnPercent(remainingAnimDelay);
   }

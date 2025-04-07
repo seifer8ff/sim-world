@@ -1,7 +1,6 @@
 import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
-import { Tree } from "../entities/tree/tree";
 import { generateId } from "../misc-utility";
 import { ActorBase } from "../entities/actor";
 
@@ -22,9 +21,12 @@ export class GrowAction implements Action {
 
   run(): Promise<any> {
     // console.log("run Grow Action on actor: ", this.actor.name);
-    if (this.actor instanceof Tree) {
-      this.actor.growTree();
+    if (this.actor.growthStep) {
+      // do grow action
     }
+    // if (this.actor instanceof Tree) {
+    //   this.actor.growTree();
+    // }
     // run plant growth algo here and add a new tile if needed
 
     //  .....MAYBE......

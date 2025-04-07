@@ -26,6 +26,7 @@ import { clamp } from "rot-js/lib/util";
 import { Assets, Sprite, Texture } from "pixi.js";
 import { GameSettings } from "./game-settings";
 import { shuffle } from "lodash";
+import { TileStats } from "./web-components/tile-info";
 
 export type MapType = ValueMap | BiomeMap | TileMap;
 export type ValueMap = Map<number, number>;
@@ -942,7 +943,7 @@ export class MapWorld {
     biomeTypes: BiomeId[],
     quantity: number = 1,
     onlyPassable = true,
-    isPlant: boolean = false,
+    isDenseLayer: boolean = false,
     maxAttempts: number = 100
   ): Point[] {
     let result: Point[] = [];
@@ -967,8 +968,8 @@ export class MapWorld {
           ) {
             // plants have a dense tile grid, so add all possible dense points
             // TODO: check if all dense points are passable before adding
-            if (isPlant) {
-              pos = Tile.translatePoint(pos, Layer.TERRAIN, Layer.PLANT);
+            if (isDenseLayer) {
+              pos = Tile.translatePoint(pos, Layer.TERRAIN, Layer.GROUNDCOVER);
               for (let x = 0; x < Tile.tileDensityRatio; x++) {
                 for (let y = 0; y < Tile.tileDensityRatio; y++) {
                   result.push(new Point(pos.x + x, pos.y + y));
@@ -1011,6 +1012,18 @@ export class MapWorld {
     return biomeId && !impassible;
   }
 
+  getInfoAt(x: number, y: number): TileStats {
+    const index = positionToIndex(x, y, Layer.TERRAIN);
+    return {
+      height: this.heightMap.get(index),
+      magnetism: this.polesMap.magnetismMap.get(index),
+      temperaturePercent: this.tempMap.getTempByIndex(index),
+      moisture: this.moistureMap.getMoistureByIndex(index),
+      sunlight: this.getTotalLight(x, y),
+      biome: Biomes.Biomes[this.biomeMap.get(index)],
+    };
+  }
+
   getTotalLight(x: number, y: number): number {
     const posIndex = positionToIndex(x, y, Layer.TERRAIN);
     const lightFromShadows = this.shadowMap.shadowMap[posIndex];
@@ -1044,11 +1057,9 @@ export class MapWorld {
   draw(): void {
     let tilePos: Point;
     let tileId: number;
-    let tile: Tile;
     for (let tileIndex of this.dirtyTiles) {
       tilePos = indexToPosition(tileIndex, Layer.TERRAIN);
       tileId = this.tileMap[tileIndex];
-      tile = Tile.tiles[tileId];
       this.game.renderer.removeFromScene(tileIndex, Layer.TERRAIN);
       this.game.renderer.addTileIdToScene(tilePos, Layer.TERRAIN, tileId);
     }

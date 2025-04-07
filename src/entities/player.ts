@@ -2,7 +2,7 @@ import { KEYS, DIRS, Path, RNG } from "rot-js";
 import { Game } from "../game";
 import { Point } from "../point";
 import { InputUtility } from "../input-utility";
-import { Tile, TileSubType, TileType } from "../tile";
+import { Tile } from "../tile";
 import { WaitAction } from "../actions/waitAction";
 import { Action } from "../actions/action";
 import TypeIcon from "../shoelace/assets/icons/person-vcard.svg";
@@ -17,8 +17,7 @@ import { GameSettings } from "../game-settings";
 export class Player {
   id: number;
   tile: Tile;
-  type: TileType;
-  subType: TileSubType;
+  // subType: TileSubType;
   action: Action;
   goal: Action;
   sprite: Renderable;
@@ -26,21 +25,21 @@ export class Player {
 
   constructor(private game: Game, public position: Point) {
     this.id = generateId();
-    this.tile = Tile.player;
-    this.type = this.tile.type;
-    this.subType = TileSubType.Human;
+    // this.tile = Tile.player;
+    // this.type = this.tile.type;
+    // this.subType = TileSubType.Human;
 
-    if (this.tile.animationKeys) {
-      const animations = Assets.cache.get(this.tile.spritePath).data.frames;
-      const animKeys = Object.keys(animations).sort();
-      this.sprite = AnimatedSprite.fromFrames(animKeys);
-      (this.sprite as AnimatedSprite).animationSpeed =
-        GameSettings.options.animationSpeed * this.game.timeManager.timeScale;
-      (this.sprite as AnimatedSprite).loop = true;
-      (this.sprite as AnimatedSprite).play();
-    } else {
-      this.sprite = Sprite.from(this.tile.spritePath);
-    }
+    // if (this.tile.animationKeys) {
+    //   const animations = Assets.cache.get(this.tile.spritePath).data.frames;
+    //   const animKeys = Object.keys(animations).sort();
+    //   this.sprite = AnimatedSprite.fromFrames(animKeys);
+    //   (this.sprite as AnimatedSprite).animationSpeed =
+    //     GameSettings.options.animationSpeed * this.game.timeManager.timeScale;
+    //   (this.sprite as AnimatedSprite).loop = true;
+    //   (this.sprite as AnimatedSprite).play();
+    // } else {
+    //   this.sprite = Sprite.from(this.tile.spritePath);
+    // }
 
     this.keyMap = {};
     this.keyMap[KEYS.VK_W] = 0; // up

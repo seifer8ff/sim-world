@@ -98,7 +98,7 @@ export class MapShadows {
     this.minShadowLength = 0;
     this.maxShadowLength = 5;
     this.ambientLightStrength = 0.8;
-    this.shadowLength = this.maxShadowLength;
+    this.shadowLength = GameSettings.options.maxShadowLength;
     this.oldShadowLength = this.shadowLength;
     this.oldPhase = this.game.timeManager.lightPhase;
     this.sunupOffsetMap = [];
@@ -106,7 +106,7 @@ export class MapShadows {
     this.sundownDropoffMap = new Map();
     this.sunupDropoffMap = new Map();
     this.topdownDropoffMap = new Map();
-    for (let i = 0; i < this.maxShadowLength + 1; i++) {
+    for (let i = 0; i < GameSettings.options.maxShadowLength + 1; i++) {
       // start with 0 instead of minShadowLength to account for special case shadow maps, like the topdown map
       this.sundownDropoffMap.set(i, new Map());
       this.sunupDropoffMap.set(i, new Map());
@@ -291,8 +291,8 @@ export class MapShadows {
       this.shadowLength = Math.round(
         lerp(
           remainingLightTransitionPercent,
-          this.maxShadowLength,
-          this.minShadowLength
+          GameSettings.options.maxShadowLength,
+          GameSettings.options.minShadowLength
         )
       );
       shadowStrength = lerp(remainingLightTransitionPercent, 0, 0.8);
@@ -303,8 +303,8 @@ export class MapShadows {
       this.shadowLength = Math.round(
         lerp(
           remainingLightTransitionPercent,
-          this.maxShadowLength,
-          this.minShadowLength
+          GameSettings.options.maxShadowLength,
+          GameSettings.options.minShadowLength
         )
       );
       shadowStrength = lerp(remainingLightTransitionPercent, 0, 0.8);
@@ -397,7 +397,7 @@ export class MapShadows {
     if (dropoff > 0) {
       dropoff = 1 - dropoff;
       // since this is used to represent light later, we want to measure the drop between ambient light and 0 light
-      dropoff = lerp(this.ambientLightStrength, 0, dropoff);
+      dropoff = lerp(GameSettings.options.ambientLightStrength, 0, dropoff);
       return Math.round(dropoff * 1000) / 1000;
     }
     return 0;
@@ -434,7 +434,11 @@ export class MapShadows {
     let lastHeightLevel: HeightLayer;
     let dropoff = 0;
 
-    for (let i = this.minShadowLength; i < this.maxShadowLength + 1; i++) {
+    for (
+      let i = GameSettings.options.minShadowLength;
+      i < GameSettings.options.maxShadowLength + 1;
+      i++
+    ) {
       lastRow = coordMap[row - i];
       const lastIndex = index - i;
       if (!lastRow || lastIndex < 0) {
@@ -521,7 +525,8 @@ export class MapShadows {
       return 0;
     }
     // if there is no dropoff, this tile gets full sun
-    const sunlight = map.get(posIndex) || this.ambientLightStrength;
+    const sunlight =
+      map.get(posIndex) || GameSettings.options.ambientLightStrength;
 
     return sunlight;
   }

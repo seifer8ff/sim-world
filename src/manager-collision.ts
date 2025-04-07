@@ -24,7 +24,7 @@ export class ManagerCollision {
       Tile.tileDensityRatio; // account for dense grid, like for plants
     gridSize *= layerCount; // account for each layer
     this.actorCollisionGrid = new Int32Array(gridSize);
-    this.layers = [Layer.ENTITY, Layer.TREE];
+    this.layers = [Layer.ACTOR, Layer.SMALLACTOR];
   }
 
   public occupyTile(x: number, y: number, layer: Layer, id: number) {
@@ -74,7 +74,7 @@ export class ManagerCollision {
   }
 
   public isOccupiedByActor(x: number, y: number, actorId: number): boolean {
-    const index = positionToIndex(x, y, Layer.ENTITY);
+    const index = positionToIndex(x, y, Layer.ACTOR);
     return this.actorCollisionGrid[index] === actorId;
   }
 

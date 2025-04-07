@@ -1,6 +1,5 @@
 import { Game } from "../game";
 import { Point } from "../point";
-import { TileSubType } from "../tile";
 import { Action } from "../actions/action";
 import { MoveAction } from "../actions/moveAction";
 import { WaitAction } from "../actions/waitAction";
@@ -8,6 +7,7 @@ import { HarvestAction } from "../actions/harvestAction";
 import { WanderAction } from "../actions/wanderAction";
 import {
   ActorBase,
+  CanFruit,
   WithAnimator,
   WithID,
   WithPathing,
@@ -15,6 +15,8 @@ import {
 } from "../entities/actor";
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
+import { Animator } from "../components/animator";
+import { Tile } from "../tile";
 
 export class BrainAnimal implements Brain {
   action: Action | null;
@@ -30,22 +32,28 @@ export class BrainAnimal implements Brain {
 
   private planGoal(): Action {
     for (let i = 0; i < 25; i++) {
-      const plantTarget = this.game.actorManager.getRandomActorPositions(
-        TileSubType.Tree,
-        1
+      const plantTargets: ActorBase[] = this.game.actorManager.getNearestActors(
+        this.actor.position,
+        ["fruitCount"],
+        50 // count to return
+      );
+      const plantTarget = plantTargets.filter(
+        (actor) => actor.fruitCount > 0
       )[0];
       if (plantTarget) {
+        const translatedPosition = Tile.translatePoint(
+          plantTarget.position,
+          plantTarget.layer,
+          this.actor.layer
+        );
         // check if reachable
-        return new HarvestAction(this.game, this.actor, plantTarget);
+        return new HarvestAction(
+          this.game,
+          this.actor,
+          translatedPosition,
+          plantTarget as ActorBase & WithPosition & CanFruit
+        );
       }
-    }
-    const shrubTarget = this.game.actorManager.getRandomActorPositions(
-      TileSubType.Shrub,
-      1
-    )[0];
-    if (shrubTarget) {
-      // check if reachable
-      return new HarvestAction(this.game, this.actor, shrubTarget);
     }
     return new WaitAction(this.game, this.actor, this.actor.position!!);
   }
@@ -125,7 +133,7 @@ export class BrainAnimal implements Brain {
       .run()
       .then((res: { movementVector: [number, number] }) => {
         // face the sprite/anim to the direction of movement
-        this.updateFacing(res?.movementVector);
+        Animator.updateFacing(res?.movementVector, this.actor.animator);
 
         if (this.goal === this.action) {
           // goal completed, pick a new one next turn
@@ -135,29 +143,5 @@ export class BrainAnimal implements Brain {
         this.action = null;
         return res;
       });
-  }
-
-  public updateFacing(moveVector: [number, number]): void {
-    if (moveVector) {
-      // the action involves movement, so update sprite facing
-      switch (moveVector[0]) {
-        case 1:
-          this.actor.animator.setAnimation("walk_right");
-          break;
-        case -1:
-          this.actor.animator.setAnimation("walk_left");
-          break;
-        case 0:
-          switch (moveVector[1]) {
-            case 1:
-              this.actor.animator.setAnimation("walk_down");
-              break;
-            case -1:
-              this.actor.animator.setAnimation("walk_up");
-              break;
-          }
-          break;
-      }
-    }
   }
 }

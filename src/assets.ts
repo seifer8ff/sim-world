@@ -1,6 +1,6 @@
 import { Assets, AssetsManifest } from "pixi.js";
 import * as PIXI from "pixi.js";
-import { Tile, TileType, BaseTileKey } from "./tile";
+import { Tile, BaseTileKey } from "./tile";
 import { Season } from "./time-manager";
 import { Biome, BiomeId, Biomes } from "./biomes";
 import { TreeSpecies } from "./entities/tree/tree-species";
@@ -115,16 +115,17 @@ export function processManualTiles() {
   // this is for tiles that don't have a tileset
   const manualTiles = [
     Tile.mushroom,
-    Tile.person,
-    Tile.player,
     Tile.shrub,
     Tile.tree,
+    Tile.treeCanopy,
     Tile.cow,
     Tile.seagull,
     Tile.sharkBlue,
   ];
   manualTiles.forEach((tile) => {
+    // generate a texture for the tile if it doesn't exist yet
     Tile.tiles[tile.id] = tile;
+    Tile.textures[tile.id] = PIXI.Texture.from(tile.spritePath); // Store the texture for each tile
   });
 }
 
@@ -147,10 +148,9 @@ export function generateTileset(tilesetMeta: Biome) {
         tilesetMeta,
         j,
         new Tile(
-          TileType.Terrain,
-          tilesetUrl,
           tilesetUrl,
           tilesetMeta.color,
+          undefined,
           undefined,
           tilesetMeta.id
         )
@@ -161,10 +161,9 @@ export function generateTileset(tilesetMeta: Biome) {
     tilesetMeta,
     BaseTileKey,
     new Tile(
-      TileType.Terrain,
-      tilesetMeta.baseTile,
       tilesetMeta.baseTile,
       tilesetMeta.color,
+      undefined,
       undefined,
       tilesetMeta.id
     )
@@ -173,18 +172,12 @@ export function generateTileset(tilesetMeta: Biome) {
 
 export function getCachedTileTexture(sprite: string): CachedTexture {
   const cachedTexture: PIXI.Texture = PIXI.Cache.get(sprite);
-  // console.log(`getCached tile for ${sprite}: `, cachedTexture);
   if (cachedTexture) {
     return {
       url: cachedTexture.baseTexture.resource.src,
       xOffset: cachedTexture.frame.x,
       yOffset: cachedTexture.frame.y,
     };
-    // return {
-    //   url: pixiSprite.baseTexture.resource.src,
-    //   xOffset: pixiSprite._frame.x,
-    //   yOffset: pixiSprite._frame.y,
-    // };
   }
   return null;
 }
@@ -209,6 +202,7 @@ function addTileToTileset(
     Tile.Tilesets[tilesetMeta.id][season][tileIndex] = tile;
   }
   Tile.tiles[tile.id] = tile;
+  Tile.textures[tile.id] = PIXI.Texture.from(tile.spritePath);
 }
 
 // function addBaseTileToTileset(tilesetMeta: Biome, tile: Tile) {

@@ -1,10 +1,9 @@
 import { Point } from "../point";
-import { Tile, TileSubType, TileType } from "../tile";
-import { Renderable } from "../renderer";
+import { Tile } from "../tile";
+import { Layer, Renderable } from "../renderer";
 import { TreeSpeciesID } from "./tree/tree-species";
-import { Leaf, TreeBranch } from "../manager-trees";
-import { AnimatedSprite } from "pixi.js";
-import { Animator } from "../components/animator";
+import { AnimatedSprite, Sprite } from "pixi.js";
+import { AnimationMap, Animator } from "../components/animator";
 import { Brain } from "../brains/brain";
 import { Description } from "../components/description";
 import { BiomeId } from "../biomes";
@@ -16,6 +15,10 @@ export interface WithID {
 export interface WithName {
   name?: string;
 }
+
+export type CanFruit = {
+  fruitCount: number; // number of fruits currently available on the actor
+};
 
 export interface WithPosition {
   position: Point;
@@ -32,10 +35,17 @@ export interface WithDescription {
   description: Description;
 }
 
-export interface WithTile {
-  tile: number;
-  type: TileType;
-  subType: TileSubType;
+export interface WithSprite {
+  sprite: Sprite | AnimatedSprite;
+  spritePath: string; // path to the sprite image file
+}
+
+export interface WithLayer {
+  layer: Layer; // the layer this actor is on (e.g. GROUNDCOVER, TREES, etc.)
+}
+
+export interface WithTile extends WithLayer {
+  tile: number; // tile index. Used in rendering tilemaps to retrieve Tile.textures[tile]
 }
 
 export interface WithBrain {
@@ -43,9 +53,9 @@ export interface WithBrain {
 }
 
 export interface WithAnimator {
-  animator: Animator;
-  animatedTile: Tile;
-  sprite: AnimatedSprite;
+  animator: Animator; // class that handles playing animations for the actor
+  animationMap: AnimationMap; // map of animation keys to a list of animation names
+  animationPath: string; // path to the animation JSON file
 }
 
 export interface WithRenderable {
@@ -53,6 +63,7 @@ export interface WithRenderable {
 }
 
 export interface WithGrowth {
+  canGrow?: boolean; // whether the actor can grow or not
   growthStep?: number;
 }
 
@@ -60,33 +71,12 @@ export interface WithSpecies {
   species?: TreeSpeciesID;
 }
 
-export interface WithTrunk {
-  trunk?: TreeBranch;
-  curve?: number;
-  curveDirection?: number;
-  trunkTextureIndex?: number;
-  trunkBaseTextureIndex?: number;
+export interface WithTrunkBase {
+  trunkBaseSprite: string;
 }
 
-export interface WithBranches {
-  branches?: TreeBranch[];
-  branchTextureIndex?: number;
-  branchesPerSegment?: number;
-  branchChance?: number;
-  trunkSegmentWidth?: number;
-  trunkSegmentHeight?: number;
-  branchSegmentWidth?: number;
-  branchSegmentHeight?: number;
-  totalSegments?: number;
-}
-
-export interface WithLeaves {
-  leaves?: Map<number, Leaf[]>; // branch ID -> leaf sprite []
-  leafTextureIndex?: number;
-  leavesPerSegment?: number;
-  leafSize?: number;
-  leafDistance?: number;
-  leafDensity?: number;
+export interface WithCanopy {
+  canopySprite: string;
 }
 
 export type ActorBase = Partial<
@@ -96,45 +86,31 @@ export type ActorBase = Partial<
     WithPathing &
     WithDescription &
     WithTile &
+    WithSprite &
     WithAnimator &
     WithBrain &
     WithRenderable &
     WithGrowth &
     WithSpecies &
-    WithTrunk &
-    WithBranches &
-    WithLeaves
+    CanFruit &
+    WithTrunkBase &
+    WithCanopy
 >;
 
 export enum ComponentType {
+  animatedSprite = "animatedSprite",
   id = "id",
   name = "name",
   position = "position",
   collider = "collider",
   tile = "tile",
-  type = "type",
-  subType = "subType",
+  layer = "layer",
   renderable = "renderable",
   species = "species",
+  canGrow = "canGrow",
   growthStep = "growthStep",
   trunk = "trunk",
-  curve = "curve",
-  curveDirection = "curveDirection",
   trunkTextureIndex = "trunkTextureIndex",
-  branches = "branches",
-  branchTextureIndex = "branchTextureIndex",
-  branchesPerSegment = "branchesPerSegment",
-  branchChance = "branchChance",
-  trunkSegmentWidth = "trunkSegmentWidth",
-  trunkSegmentHeight = "trunkSegmentHeight",
-  branchSegmentWidth = "branchSegmentWidth",
-  branchSegmentHeight = "branchSegmentHeight",
-  totalSegments = "totalSegments",
-  leaves = "leaves",
-  leavesPerSegment = "leavesPerSegment",
-  leafSize = "leafSize",
-  leafDistance = "leafDistance",
-  leafDensity = "leafDensity",
   animator = "animator",
   animatedTile = "animatedTile",
   sprite = "sprite",
@@ -142,11 +118,9 @@ export enum ComponentType {
   path = "path",
   range = "range",
   validBiomes = "validBiomes",
-  // action = "action",
-  // goal = "goal",
-  // updateFacing = "updateFacing",
-  // plan = "plan",
-  // act = "act",
+  trunkBaseSprite = "trunkBaseSprite",
+  canopySprite = "canopySprite",
+  fruitCount = "fruitCount",
 }
 
 export function isActor(object: any): object is ActorBase {

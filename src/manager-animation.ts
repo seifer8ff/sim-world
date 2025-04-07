@@ -113,7 +113,7 @@ export class ManagerAnimation {
 
       this.game.renderer.moveCachedSpriteTransform(
         animation.tileKey,
-        Layer.ENTITY,
+        Layer.ACTOR,
         x,
         y
       );

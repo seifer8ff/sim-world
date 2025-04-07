@@ -42,6 +42,11 @@ export class GameSettings {
     maxTickRate: 1000 / 60, // 60 game updates per second max
     minTickRate: 1000 / 4, // 2 game updates per second min
     animationSpeed: 0.55, // speed at which pixijs animates AnimatedSprites
+    renderChunkCount: 1, // how many chunks to split the world into for rendering MUST BE ODD, ex: 3 = 3x3 = 9 chunks
+    hideDenseLayersTileCount: 150 * 150, // hide dense layers (like groundcover) if the tile count exceeds this value
+    ambientLightStrength: 0.8,
+    minShadowLength: 0,
+    maxShadowLength: 5,
   };
   static worldSizeOptions = [
     {

@@ -27,7 +27,7 @@ export class MoveAction implements Action {
     const oldPos = this.game.userInterface.camera.TileToScreenCoords(
       this.actor.position.x,
       this.actor.position.y,
-      Layer.ENTITY
+      Layer.ACTOR
     );
     // get the direction of movement
     const movementVector = this.targetPos.movementVector(this.actor.position);
@@ -55,7 +55,7 @@ export class MoveAction implements Action {
             this.game.collisionManager.clearEntityTile(
               this.actor.position.x,
               this.actor.position.y,
-              Layer.ENTITY
+              Layer.ACTOR
             );
             // update the position of the sprite in the renderer's cache
             // keeps the renderer's representation of the map in sync with the game
@@ -63,7 +63,7 @@ export class MoveAction implements Action {
             this.game.renderer.updateSpriteCachePosition(
               this.actor.position,
               this.targetPos,
-              Layer.ENTITY
+              Layer.ACTOR
             );
             // keep actor's position in sync with target position
             this.actor.position = new Point(this.targetPos.x, this.targetPos.y);
@@ -71,7 +71,7 @@ export class MoveAction implements Action {
             this.game.collisionManager.occupyTile(
               this.targetPos.x,
               this.targetPos.y,
-              Layer.ENTITY,
+              Layer.ACTOR,
               this.actor.id
             );
           },
@@ -82,13 +82,13 @@ export class MoveAction implements Action {
         this.game.collisionManager.clearEntityTile(
           this.actor.position.x,
           this.actor.position.y,
-          Layer.ENTITY
+          Layer.ACTOR
         );
         // if no lerp, just update the sprite cache position
         this.game.renderer.updateSpriteCachePosition(
           this.actor.position,
           this.targetPos,
-          Layer.ENTITY
+          Layer.ACTOR
         );
         // keep actor's position in sync with target position
         this.actor.position = new Point(this.targetPos.x, this.targetPos.y);

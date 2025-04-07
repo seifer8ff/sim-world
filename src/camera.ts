@@ -55,10 +55,12 @@ export class Camera {
   private lastZoom: number;
   private lastPivot: Point;
   private panning: boolean;
+  private map: MapWorld; // reference to the map generator, for info about the terrain
 
   private showSidebarTimer: number; // how many ms until sidebar is unhidden
 
   constructor(private game: Game, private ui: UserInterface) {
+    this.map = this.game.map;
     this.defaultZoom = 1.4;
     this.currentZoom = this.defaultZoom;
     this.minZoom = 0.15;
@@ -140,7 +142,7 @@ export class Camera {
   public refreshPointerTargetInfo() {
     if (this.pointerTarget) {
       if (!isActor(this.pointerTarget.target)) {
-        this.pointerTarget.info = this.game.getTileInfoAt(
+        this.pointerTarget.info = this.map.getInfoAt(
           this.pointerTarget.position.x,
           this.pointerTarget.position.y
         );
@@ -169,7 +171,7 @@ export class Camera {
       this.pointerTarget = {
         position: pos,
         target: target,
-        info: this.game.getTileInfoAt(pos.x, pos.y),
+        info: this.map.getInfoAt(pos.x, pos.y),
       };
       this.ui.components.sideMenu.setActorTarget(null);
       if (viewportTarget) {
@@ -207,7 +209,7 @@ export class Camera {
     }
 
     // otherwise, select terrain tile at point
-    tile = this.game.getTerrainTileAt(x, y);
+    tile = this.map.getTile(x, y);
     this.setPointerTarget(new Point(x, y), tile, viewportTarget);
 
     return this.pointerTarget;
@@ -219,7 +221,7 @@ export class Camera {
     layer: Layer = Layer.TERRAIN
   ): Point {
     let tileSize = Tile.size;
-    if (layer === Layer.PLANT || layer === Layer.TREE) {
+    if (Tile.isDenseLayer(layer)) {
       tileSize = Tile.denseSize;
     }
     return new Point(x * tileSize, y * tileSize);
