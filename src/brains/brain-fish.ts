@@ -10,7 +10,7 @@ import {
   WithPathing,
   WithPosition,
   WithTile,
-} from "../entities/actor";
+} from "../actor";
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
 import { Animator } from "../components/animator";

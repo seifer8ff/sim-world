@@ -1,7 +1,7 @@
 import { Game } from "../game";
 import { AnimatedSprite, Assets, Texture } from "pixi.js";
 import { GameSettings } from "../game-settings";
-import { ActorBase, WithAnimator, WithSprite } from "../entities/actor";
+import { ActorBase, WithAnimator, WithSprite } from "../actor";
 import { Tile } from "../tile";
 
 // map of animation types to a list of animation names
@@ -100,6 +100,9 @@ export class Animator {
       this.actor.sprite = AnimatedSprite.fromFrames(
         this.animationFrames[this.currentAnimation]
       );
+      this.actor.sprite.anchor.set(0.5);
+      this.actor.sprite.position.x = this.actor.position?.x * Tile.size;
+      this.actor.sprite.position.y = this.actor.position?.y * Tile.size;
       animatedSprite = this.actor.sprite as AnimatedSprite;
     }
     if (GameSettings.options.toggles.enableAnimations) {

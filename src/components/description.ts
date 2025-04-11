@@ -9,7 +9,7 @@ import SunIcon from "../shoelace/assets/icons/brightness-high.svg";
 import MagnetIcon from "../shoelace/assets/icons/magnet.svg";
 import HeightIcon from "../shoelace/assets/icons/arrow-up-short.svg";
 
-import { ActorBase } from "../entities/actor";
+import { ActorBase } from "../actor";
 import { Tile } from "../tile";
 import { PointerTarget } from "../camera";
 

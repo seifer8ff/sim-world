@@ -1,4 +1,4 @@
-import { ActorBase, WithPosition } from "../entities/actor";
+import { ActorBase, WithPosition } from "../actor";
 import { Point } from "../point";
 
 export interface Action {

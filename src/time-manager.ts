@@ -2,7 +2,7 @@ import { Game } from "./game";
 import Action from "rot-js/lib/scheduler/action";
 import { LightPhase } from "./map-shadows";
 import { GameSettings } from "./game-settings";
-import { ActorBase } from "./entities/actor";
+import { ActorBase } from "./actor";
 
 export enum Season {
   Spring = "spring",

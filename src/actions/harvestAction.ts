@@ -2,7 +2,7 @@ import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
 import { generateId } from "../misc-utility";
-import { ActorBase, CanFruit, WithPosition } from "../entities/actor";
+import { ActorBase, CanFruit, WithPosition } from "../actor";
 
 export class HarvestAction implements Action {
   readonly id: number;

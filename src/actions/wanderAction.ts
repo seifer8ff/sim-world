@@ -2,7 +2,7 @@ import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
 import { generateId } from "../misc-utility";
-import { ActorBase } from "../entities/actor";
+import { ActorBase } from "../actor";
 
 export class WanderAction implements Action {
   readonly id: number;

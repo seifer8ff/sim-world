@@ -1,4 +1,4 @@
-import { WithID, WithPathing, WithPosition } from "./entities/actor";
+import { WithID, WithPathing, WithPosition } from "./actor";
 import { Path, RNG } from "rot-js";
 import { Point } from "./point";
 import { Biome, BiomeId } from "./biomes";
@@ -42,7 +42,7 @@ export class SystemPathfinder {
       inRange &&
       traversableBiome &&
       (!this.game.collisionManager.isBlocked(x, y) ||
-        this.game.collisionManager.isOccupiedByActor(x, y, actor.id))
+        this.game.collisionManager.isOccupiedBySelf(x, y, actor.id))
     );
   }
 

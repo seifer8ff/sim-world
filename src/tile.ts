@@ -10,12 +10,21 @@ import {
 } from "./components/animator";
 
 export interface Tile {
-  id: number; // unique identifier for the tile
-  readonly spritePath: string; // path to the sprite image file
-  readonly color: string; // color used for simple rendering or debugging
-  readonly animationPath?: string; // optional path for animation frames, if any
-  readonly animationMap?: AnimationMap; // optional map of animation types to their keys
-  readonly biomeId?: BiomeId; // biome id for terrain tiles, if applicable
+  // unique identifier for the tile
+  // used to lookup the cached tile sprite and class data
+  readonly id: number;
+  // path to the sprite image file. sprite gets loaded into cache by this path
+  // for animated sprites, this is the path to the icon, used in menus, etc
+  readonly spritePath: string;
+  readonly color: string; // color used for simple rendering or debugging, in place of sprite
+  // path for animation manifest (i.e. sprites/cow_00/cow_00.json). required for animated sprites
+  // manifest contains a list of animation frame data
+  readonly animationPath?: string;
+  // map of animation types to their keys, required for animated sprites
+  readonly animationMap?: AnimationMap;
+  // ID for the biome this tile belongs to, if applicable (just terrain tiles).
+  // useful for looking up biome without having to access large map files
+  readonly biomeId?: BiomeId;
 }
 
 export const BaseTileKey = "base";
@@ -35,9 +44,7 @@ export class Tile implements Tile {
   static readonly tileDensityRatio = Tile.size / Tile.denseSize;
   static Tilesets: Tileset = {};
   static tiles: Tile[] = []; // all tiles, indexed by their unique id
-  static tileSpritePaths: string[] = []; // array of sprite paths for all tiles, indexed by their unique id
   static textures: Texture[] = []; // array of textures for all tiles, indexed by their unique id
-  public id: number;
   private static currentId = 0;
 
   static readonly mushroom = new Tile(
@@ -64,26 +71,18 @@ export class Tile implements Tile {
     "sprites/shark_blue/shark_blue.json",
     defaultAnimationMap
   );
-  static readonly shrub = new Tile("plant-8x8", "#95C577");
-  static readonly tree = new Tile("trunk_base_default", "#95C577");
-  static readonly treeCanopy = new Tile("trunk_canopy_wide", "#95C577");
 
   constructor(
     public readonly spritePath: string,
     public readonly color: string,
     public readonly animationPath?: string, // optional path for animation frames, if any
     public readonly animationMap?: AnimationMap, // optional map of animation types to their keys
-    public readonly biomeId?: BiomeId // biome id for terrain tiles
-  ) {
-    this.id = Tile.currentId++;
-  }
+    public readonly biomeId?: BiomeId, // biome id for terrain tiles
+    public readonly id: number = Tile.currentId++ // unique id for this tile
+  ) {}
 
   public static isDenseLayer(layer: Layer): boolean {
-    return (
-      layer === Layer.GROUNDCOVER ||
-      layer === Layer.SMALLACTOR ||
-      layer === Layer.CANOPY
-    );
+    return layer === Layer.GROUNDCOVER || layer === Layer.SMALLACTOR;
   }
 
   public static translatePoint(position: Point, from: Layer, to: Layer): Point {
@@ -106,17 +105,9 @@ export class Tile implements Tile {
   ): number {
     if (from === to) return positionParameter;
 
-    if (
-      from === Layer.GROUNDCOVER ||
-      from === Layer.SMALLACTOR ||
-      from === Layer.CANOPY
-    ) {
+    if (this.isDenseLayer(from)) {
       return Math.floor(positionParameter / Tile.tileDensityRatio);
-    } else if (
-      to === Layer.GROUNDCOVER ||
-      to === Layer.SMALLACTOR ||
-      to === Layer.CANOPY
-    ) {
+    } else if (this.isDenseLayer(to)) {
       return Math.floor(positionParameter * Tile.tileDensityRatio);
     }
     return Math.floor(positionParameter);

@@ -942,7 +942,7 @@ export class MapWorld {
   getRandomTilePositions(
     biomeTypes: BiomeId[],
     quantity: number = 1,
-    onlyPassable = true,
+    unblockedOnly = true,
     isDenseLayer: boolean = false,
     maxAttempts: number = 100
   ): Point[] {
@@ -963,13 +963,13 @@ export class MapWorld {
         randPositions.push(randPos);
         for (let pos of randPositions) {
           if (
-            !onlyPassable ||
-            (onlyPassable && this.isPassable(pos.x, pos.y))
+            !unblockedOnly ||
+            !this.game.collisionManager.isBlocked(pos.x, pos.y)
           ) {
             // plants have a dense tile grid, so add all possible dense points
             // TODO: check if all dense points are passable before adding
             if (isDenseLayer) {
-              pos = Tile.translatePoint(pos, Layer.TERRAIN, Layer.GROUNDCOVER);
+              pos = Tile.translatePoint(pos, Layer.TERRAIN, Layer.SMALLACTOR);
               for (let x = 0; x < Tile.tileDensityRatio; x++) {
                 for (let y = 0; y < Tile.tileDensityRatio; y++) {
                   result.push(new Point(pos.x + x, pos.y + y));
@@ -990,6 +990,14 @@ export class MapWorld {
   getTile(x: number, y: number): Tile {
     const tileId = this.tileMap[positionToIndex(x, y, Layer.TERRAIN)];
     return Tile.tiles[tileId];
+  }
+
+  getTileIdByPosition(x: number, y: number): number {
+    return this.tileMap[positionToIndex(x, y, Layer.TERRAIN)];
+  }
+
+  getTileIdByIndex(index: number): number {
+    return this.tileMap[index];
   }
 
   getBiome(x: number, y: number): Biome {
@@ -1055,16 +1063,16 @@ export class MapWorld {
   }
 
   draw(): void {
-    let tilePos: Point;
-    let tileId: number;
-    for (let tileIndex of this.dirtyTiles) {
-      tilePos = indexToPosition(tileIndex, Layer.TERRAIN);
-      tileId = this.tileMap[tileIndex];
-      this.game.renderer.removeFromScene(tileIndex, Layer.TERRAIN);
-      this.game.renderer.addTileIdToScene(tilePos, Layer.TERRAIN, tileId);
-    }
-    // Clear the changed tiles after drawing them
-    this.dirtyTiles = [];
+    // let tilePos: Point;
+    // let tileId: number;
+    // for (let tileIndex of this.dirtyTiles) {
+    //   tilePos = indexToPosition(tileIndex, Layer.TERRAIN);
+    //   tileId = this.tileMap[tileIndex];
+    //   this.game.renderer.removeFromScene(tileIndex, Layer.TERRAIN);
+    //   this.game.renderer.addTileIdToScene(tilePos, Layer.TERRAIN, tileId);
+    // }
+    // // Clear the changed tiles after drawing them
+    // this.dirtyTiles = [];
   }
 
   onTileEnterViewport(indexes: number[]): void {

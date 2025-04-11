@@ -10,10 +10,10 @@ import { BrainAnimal } from "./brains/brain-animal";
 import { BrainCow } from "./brains/brain-cow";
 import { Tile } from "./tile";
 import {
-  TreeSpecies,
-  TreeSpeciesEnum,
-  TreeSpeciesID,
-} from "./entities/tree/tree-species";
+  PlantSpecies,
+  PlantSpeciesEnum,
+  PlantSpeciesId,
+} from "./plant-species";
 import { Query, World } from "miniplex";
 import {
   ComponentType,
@@ -22,64 +22,49 @@ import {
   WithID,
   WithAnimator,
   WithTile,
-  WithTrunkBase,
-  WithCanopy,
-} from "./entities/actor";
-import { ManagerTrees } from "./manager-trees";
+  isPointer,
+} from "./actor";
 import { ManagerShrubs } from "./manager-shrubs";
 import { Animator } from "./components/animator";
 import { Description } from "./components/description";
+import { AnimatedSprite, DisplayObject, Sprite } from "pixi.js";
 
 export class ManagerActor {
-  private landBiomes: BiomeId[];
-  private waterBiomes: BiomeId[];
-  private airBiomes: BiomeId[];
   private world: World<ActorBase>;
-  public treeManager: ManagerTrees;
   public shrubManager: ManagerShrubs;
 
   // queries
   public allPositioned: Query<ActorBase>;
   public allPlants: Query<ActorBase>;
   public groundCover: Query<ActorBase>;
+  public groundCoverGrowth: Query<ActorBase>;
   public allTrees: Query<ActorBase>;
   public withPosition: Query<ActorBase & WithPosition>;
   public withCollider: Query<ActorBase>;
   public withAnimator: Query<ActorBase & WithID & WithPosition & WithAnimator>;
   public withStaticSprite: Query<ActorBase & WithID & WithTile & WithPosition>;
-  public withTrunkBase: Query<
-    ActorBase & WithID & WithPosition & WithTrunkBase
-  >;
-  public withTrunkBaseVisible: Query<
-    ActorBase & WithID & WithPosition & WithTrunkBase
-  >;
-  public withCanopy: Query<ActorBase & WithID & WithPosition & WithCanopy>;
   public withBrain: Query<ActorBase>;
+  public withUI: Query<ActorBase>;
+  public withPointer: Query<ActorBase & isPointer>;
 
   constructor(private game: Game) {
-    this.landBiomes = [
-      Biomes.Biomes.moistdirt.id,
-      Biomes.Biomes.hillsmid.id,
-      Biomes.Biomes.hillshigh.id,
-      Biomes.Biomes.valley.id,
-      Biomes.Biomes.snowhillshillsmid.id,
-      Biomes.Biomes.snowmoistdirt.id,
-    ];
-    this.waterBiomes = [Biomes.Biomes.ocean.id, Biomes.Biomes.oceandeep.id];
-    this.airBiomes = [...this.landBiomes, Biomes.Biomes.ocean.id];
     this.world = new World<ActorBase>();
     this.withPosition = this.world.with(ComponentType.position);
     this.allPositioned = this.world.with(ComponentType.position);
-    this.allPlants = this.world.with(ComponentType.layer).where(({ layer }) => {
-      return layer === Layer.GROUNDCOVER || layer === Layer.SMALLACTOR;
-    });
-    // this.allPlants = this.world
-    //   .with(ComponentType.type)
-    //   .where(({ type }) => type === TileType.Plant);
+    this.allPlants = this.world
+      .with(ComponentType.layer)
+      .with(ComponentType.canGrow)
+      .where(({ layer }) => {
+        return layer === Layer.GROUNDCOVER || layer === Layer.SMALLACTOR;
+      });
     this.groundCover = this.world
       .with(ComponentType.layer)
       .where(({ layer }) => layer === Layer.GROUNDCOVER);
-    this.allTrees = this.world.with(ComponentType.trunkBaseSprite);
+    this.groundCoverGrowth = this.groundCover.with(ComponentType.canGrow);
+    this.allTrees = this.world
+      .with(ComponentType.layer)
+      .with(ComponentType.species)
+      .where(({ layer }) => layer === Layer.SMALLACTOR);
     this.withCollider = this.world
       .with(ComponentType.position)
       .with(ComponentType.collider);
@@ -93,17 +78,19 @@ export class ManagerActor {
       .with(ComponentType.position)
       .with(ComponentType.tile)
       .where((actor) => actor.animator == null);
-    this.withTrunkBase = this.world
+    this.withUI = this.world
       .with(ComponentType.id)
       .with(ComponentType.position)
-      .with(ComponentType.trunkBaseSprite);
-    this.withCanopy = this.world
+      .with(ComponentType.sprite)
+      .with(ComponentType.isUi);
+    this.withPointer = this.world
       .with(ComponentType.id)
       .with(ComponentType.position)
-      .with(ComponentType.canopySprite);
+      .with(ComponentType.sprite)
+      .with(ComponentType.isUi)
+      .with(ComponentType.isPointer);
     this.withBrain = this.world.with(ComponentType.brain);
     this.shrubManager = new ManagerShrubs(this.game, this.world);
-    this.treeManager = new ManagerTrees(this.game, this.world);
   }
 
   getRandomActorPositions(
@@ -172,7 +159,7 @@ export class ManagerActor {
   }
 
   public getRandomTreePositions(
-    speciesId: TreeSpeciesID,
+    speciesId: PlantSpeciesId,
     quantity: number = 1
   ): Point[] {
     let buffer: Point[] = [];
@@ -226,29 +213,21 @@ export class ManagerActor {
 
   public spawnActor(
     actor: ActorBase & WithPosition & WithID,
-    layer: Layer
+    addToSchedule: boolean = false
   ): ActorBase {
+    if (!actor.position || !actor.id) return null;
     this.world.add(actor);
-    if (actor.position) {
+    if (addToSchedule) {
+      this.game.timeManager.addToSchedule(actor, true);
+    }
+    if (actor.collider) {
       this.game.collisionManager.occupyTile(
         actor.position.x,
         actor.position.y,
-        layer,
+        actor.layer,
         actor.id
       );
     }
-    if (!actor.animator && actor.sprite) {
-      // animated sprites are handled by the animator component
-      this.game.renderer.addToScene(actor.position, layer, actor.sprite);
-    }
-
-    this.game.timeManager.addToSchedule(actor, true);
-    this.game.collisionManager.occupyTile(
-      actor.position.x,
-      actor.position.y,
-      Layer.ACTOR,
-      actor.id
-    );
     return actor;
   }
 
@@ -266,7 +245,11 @@ export class ManagerActor {
       actor.position.y,
       actor.layer
     );
-    this.game.renderer.removeFromCache(actor.position, actor.layer);
-    this.game.renderer.removeFromScene(tileIndex, actor.layer);
+    let removeObj: Sprite | AnimatedSprite;
+    if (actor.sprite) {
+      removeObj = actor.sprite;
+    }
+
+    this.game.renderer.removeFromScene(removeObj, actor.layer);
   }
 }

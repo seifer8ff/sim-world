@@ -5,6 +5,7 @@ import { HeightLayer, MapWorld } from "./map-world";
 import { Point } from "./point";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
+import { Camera } from "./camera";
 
 export enum LightPhase {
   "rising" = 0,
@@ -70,6 +71,7 @@ export const HeightDropoff = {
 // TODO: ENTIRE CLASS NEEDS TO BE REWORKED
 // CALCULATE SHADOWS REGULARLY, RATHER THAN THE ENTIRE MAP AT ONCE
 export class MapShadows {
+  public camera: Camera;
   public lightManager: LightManager;
   public shadowMap: number[];
   public targetShadowMap: number[];
@@ -115,11 +117,13 @@ export class MapShadows {
   }
 
   public init() {
+    this.camera = this.game.userInterface.camera;
     this.shadowMap = [];
     this.targetShadowMap = [];
     this.occlusionMap = [];
     // only update the shadow map for the viewport tiles
-    for (let posIndex of this.game.userInterface.camera.viewportTilesPadded) {
+    const viewportTiles = this.game.userInterface.camera.viewportPadded.tiles;
+    for (let posIndex of viewportTiles) {
       this.targetShadowMap[posIndex] = 1;
       this.occlusionMap[posIndex] = 1;
     }
@@ -136,7 +140,7 @@ export class MapShadows {
     // const sortedCoordMap = this.sortByHeight(this.map.biomeMap);
 
     // this.sortedCoordMap = this.orientMapReverse(); // working properly
-    const tileIndexes = this.game.userInterface.camera.viewportTilesPadded;
+    const tileIndexes = this.game.userInterface.camera.viewportPadded.tiles;
     this.sunupOffsetMap = this.calcSunupMap();
     this.sundownOffsetMap = this.calcSundownMap();
     this.generateDropoffMaps();
@@ -144,7 +148,7 @@ export class MapShadows {
     this.updateShadowMap(false, SunDirection.Sunup);
     this.updateShadowMap(true, SunDirection.Sunup);
     this.interpolateShadowState(
-      this.game.userInterface.camera.viewportTilesUnpadded
+      this.game.userInterface.camera.viewportUnpadded.tiles
     );
   }
 
@@ -218,7 +222,9 @@ export class MapShadows {
         const coords = offsetMap[i][j];
         const x = coords[0];
         const y = coords[1];
-        if (this.game.userInterface.camera.inViewport(x, y)) {
+        if (
+          Camera.inViewport(x, y, Layer.TERRAIN, this.camera.viewportUnpadded)
+        ) {
           mapToUpdate[positionToIndex(x, y, Layer.TERRAIN)] =
             this.getCastShadowFor(x, y, dir);
         }
@@ -249,7 +255,7 @@ export class MapShadows {
     if (!GameSettings.options.toggles.enableShadows) return;
     // move towards targetShadowMap from shadowMap every frame
     this.interpolateShadowState(
-      this.game.userInterface.camera.viewportTilesPadded
+      this.game.userInterface.camera.viewportPadded.tiles
     );
   }
 

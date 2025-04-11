@@ -10,7 +10,8 @@ import { LightPhase } from "./map-shadows";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
 import { Query } from "miniplex";
-import { ActorBase } from "./entities/actor";
+import { ActorBase } from "./actor";
+import { Camera } from "./camera";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -26,7 +27,6 @@ export type RGBAColor = [number, number, number, number]; // r,g,b,a [255, 255, 
 
 export class LightManager {
   public static lightDefaults: { [key: string]: ColorType };
-  public lightMap: ColorType[]; // final color of tile, taking into account all light sources
   public lightMapR: Int32Array; // just the red color of the ColorType [r, g, b]
   public lightMapG: Int32Array;
   public lightMapB: Int32Array;
@@ -37,6 +37,7 @@ export class LightManager {
   private ambientLight: ColorType;
   private targetAmbientLight: ColorType;
   private worker: Worker;
+  private camera: Camera;
 
   constructor(private game: Game, private map: MapWorld) {
     LightManager.lightDefaults = {
@@ -82,6 +83,7 @@ export class LightManager {
   }
 
   public init() {
+    this.camera = this.game.userInterface.camera;
     const layerCount = Layer.UI;
     let layerSize =
       GameSettings.options.gameSize.width *
@@ -97,7 +99,6 @@ export class LightManager {
     // this.spriteIndexCache = new Int32Array(totalSize).fill(-1);
 
     this.dynamicLightMap = [];
-    this.lightMap = [];
     this.lightMapR = new Int32Array(totalSize);
     this.lightMapG = new Int32Array(totalSize);
     this.lightMapB = new Int32Array(totalSize);
@@ -239,7 +240,7 @@ export class LightManager {
   }
 
   public lightingCallback(x: number, y: number, color: ColorType) {
-    if (this.game.userInterface.camera.inViewport(x, y)) {
+    if (Camera.inViewport(x, y, Layer.TERRAIN, this.camera.viewportUnpadded)) {
       this.dynamicLightMap[positionToIndex(x, y, Layer.TERRAIN)] = color;
     }
   }
@@ -429,7 +430,7 @@ export class LightManager {
     includeAlpha: boolean = false
   ): ColorType | RGBAColor {
     // check if position is in viewport
-    if (!this.game.userInterface.camera.inViewport(x, y, false)) {
+    if (!Camera.inViewport(x, y, Layer.TERRAIN, this.camera.viewportUnpadded)) {
       return this.ambientLight;
     }
     let light = [];
@@ -446,6 +447,36 @@ export class LightManager {
       light.push(1);
       return light as RGBAColor;
     }
+    return light as ColorType;
+  }
+
+  public getLightForTree(
+    x: number,
+    y: number,
+    highlight: boolean = false,
+    includeAlpha: boolean = false,
+    baseTint: ColorType
+  ): ColorType | RGBAColor {
+    // check if position is in viewport
+    if (!Camera.inViewport(x, y, Layer.TERRAIN, this.camera.viewportUnpadded)) {
+      return this.ambientLight;
+    }
+    let light = [];
+    light = this.get(positionToIndex(x, y, Layer.TERRAIN));
+
+    if (highlight) {
+      light = Color.interpolate(
+        light as ColorType,
+        LightManager.lightDefaults.fullLight,
+        0.4
+      );
+    }
+    if (includeAlpha) {
+      light.push(1);
+      return light as RGBAColor;
+    }
+
+    light = Color.interpolate(baseTint as ColorType, light as ColorType);
     return light as ColorType;
   }
 
@@ -686,7 +717,6 @@ export class LightManager {
   // }
 
   public get(index: number): ColorType {
-    // return this.lightMap[index];
     return [
       this.lightMapR[index],
       this.lightMapG[index],
@@ -695,7 +725,6 @@ export class LightManager {
   }
 
   public set(index: number, color: ColorType) {
-    // this.lightMap[index] = color;
     this.lightMapR[index] = color[0];
     this.lightMapG[index] = color[1];
     this.lightMapB[index] = color[2];

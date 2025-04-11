@@ -1,11 +1,5 @@
-import {
-  ComponentType,
-  ActorBase,
-  WithPosition,
-  WithID,
-  WithCanopy,
-} from "./entities/actor";
-import { TreeSpecies, TreeSpeciesEnum } from "./entities/tree/tree-species";
+import { ComponentType, ActorBase, WithPosition, WithID } from "./actor";
+import { PlantSpecies, PlantSpeciesEnum } from "./plant-species";
 import { Game } from "./game";
 import { BiomeId, Biomes } from "./biomes";
 import { Point } from "./point";
@@ -15,6 +9,7 @@ import { Tile } from "./tile";
 import { Layer } from "./renderer";
 import { Texture } from "pixi.js";
 import { Color, RNG } from "rot-js";
+import { SystemTrees } from "./system-trees";
 
 export class ManagerShrubs {
   constructor(private game: Game, private world: World) {}
@@ -25,13 +20,14 @@ export class ManagerShrubs {
     if (pos) {
       let actor: ActorBase & WithID & WithPosition = {
         id: generateId(),
+        layer: Layer.GROUNDCOVER,
         name: "Shrub",
         position: pos,
-        tile: Tile.shrub.id,
-        layer: Layer.GROUNDCOVER,
+        species: "shrub",
         canGrow: true, // allows the shrub to grow into a tree
       };
-      return this.game.actorManager.spawnActor(actor, Layer.GROUNDCOVER);
+      // don't add the shrubs to the schedule, as their growth is handled in the shrub manager
+      return this.game.actorManager.spawnActor(actor, false);
     }
     return null;
   }
@@ -55,7 +51,7 @@ export class ManagerShrubs {
 
     // collect the positions of all shrubs into a set for easy retrieval
     const positions = new Set<string>();
-    const shrubs = this.game.actorManager.groundCover;
+    const shrubs = this.game.actorManager.groundCoverGrowth;
     for (const { position } of shrubs) {
       positions.add(`${position.x},${position.y}`);
     }
@@ -78,21 +74,12 @@ export class ManagerShrubs {
       // if the direction set is complete, remove a shrub to spawn a tree.
       if (isComplete) {
         // spawn tree in place of actively growing shrub
-        this.game.actorManager.treeManager.spawnAt(
+        SystemTrees.spawnSpeciesAt(
+          PlantSpecies.plantSpecies[PlantSpeciesEnum.PINE],
           shrub.position,
-          TreeSpecies.treeSpecies[TreeSpeciesEnum.PINE]
+          this.game.actorManager
         );
         this.world.remove(shrub);
-        // console.log("--- !!! --- shrub removed to add TREE !!");
-
-        // const trunk = this.world.add({
-        //   id: generateId(),
-        //   position: shrub.position,
-        //   tile: Tile.tree.id,
-        //   subType: TileSubType.Tree,
-        //   type: TileType.Plant,
-        // });
-        // this.world.addComponent(trunk, ComponentType.name, "Trunk");
         growSuccess = true;
         break;
       }
@@ -258,9 +245,4 @@ export class ManagerShrubs {
 
   //   return growSuccess;
   // }
-
-  public drawShrub(shrub: ActorBase): void {
-    const { tile, position } = shrub;
-    this.game.renderer.addTileIdToScene(position, Layer.GROUNDCOVER, tile);
-  }
 }

@@ -5,23 +5,23 @@ import { BrainCow } from "./brains/brain-cow";
 import { BrainFish } from "./brains/brain-fish";
 import { Animator } from "./components/animator";
 import { Description } from "./components/description";
-import { ActorBase, WithID, WithPosition } from "./entities/actor";
+import { ActorBase, WithID, WithPosition } from "./actor";
 import {
-  TreeSpecies,
-  TreeSpeciesEnum,
-  TreeSpeciesID,
-} from "./entities/tree/tree-species";
+  PlantSpecies,
+  PlantSpeciesEnum,
+  PlantSpeciesId,
+} from "./plant-species";
 import { Game } from "./game";
 import { GameSettings } from "./game-settings";
 import { generateId } from "./misc-utility";
 import { Layer } from "./renderer";
 import { Tile } from "./tile";
 import { ManagerActor } from "./manager-actors";
-import { ManagerTrees } from "./manager-trees";
 import { ManagerShrubs } from "./manager-shrubs";
 import { MapWorld } from "./map-world";
 import { UserInterface } from "./user-interface";
 import { GeneratorNames } from "./generator-names";
+import { SystemTrees } from "./system-trees";
 
 // add the initial flora/fauna to the game world
 export class GameSetup {
@@ -29,7 +29,6 @@ export class GameSetup {
   private waterBiomes: BiomeId[];
   private airBiomes: BiomeId[];
   private actorManager: ManagerActor;
-  private treeManager: ManagerTrees;
   private shrubManager: ManagerShrubs;
   private map: MapWorld;
   private userInterface: UserInterface;
@@ -37,7 +36,6 @@ export class GameSetup {
 
   constructor(private game: Game) {
     this.actorManager = this.game.actorManager;
-    this.treeManager = this.actorManager.treeManager;
     this.shrubManager = this.actorManager.shrubManager;
     this.map = this.game.map;
     this.userInterface = this.game.userInterface;
@@ -55,8 +53,8 @@ export class GameSetup {
   }
 
   init(): void {
-    this.spawnInitialAnimals();
     this.spawnInitialPlants();
+    this.spawnInitialAnimals();
     this.game.timeManager.setIsPaused(false);
     for (let i = 0; i < 20; i++) {
       this.game.gameLoop();
@@ -66,12 +64,14 @@ export class GameSetup {
 
   private spawnInitialAnimals(): void {
     let actor: Partial<ActorBase> & WithPosition & WithID;
+    const addToSchedule = true;
     for (let i = 0; i < GameSettings.options.spawn.inputs.cowCount; i++) {
       // COW
       // create an actor
       // add components representing cow
       actor = {
         id: generateId(),
+        layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.landBiomes, 1, true)[0],
         spritePath: Tile.cow.spritePath,
         animationPath: Tile.cow.animationPath,
@@ -83,12 +83,13 @@ export class GameSetup {
       actor.animator = new Animator(this.game, actor as any, 0.3);
       actor.brain = new BrainCow(this.game, actor as any);
       actor.description = new Description(actor);
-      this.actorManager.spawnActor(actor, Layer.ACTOR);
+      this.actorManager.spawnActor(actor, addToSchedule);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.sharkCount; i++) {
       // SHARK
       actor = {
         id: generateId(),
+        layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.waterBiomes, 1, true)[0],
         spritePath: Tile.sharkBlue.spritePath,
         animationPath: Tile.sharkBlue.animationPath,
@@ -101,12 +102,13 @@ export class GameSetup {
       actor.animator = new Animator(this.game, actor as any, 0.3);
       actor.brain = new BrainFish(this.game, actor as any);
       actor.description = new Description(actor);
-      this.actorManager.spawnActor(actor, Layer.ACTOR);
+      this.actorManager.spawnActor(actor, addToSchedule);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.seagullCount; i++) {
       // SEAGULL
       actor = {
         id: generateId(),
+        layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.airBiomes, 1, false)[0],
         spritePath: Tile.seagull.spritePath,
         animationPath: Tile.seagull.animationPath,
@@ -119,12 +121,13 @@ export class GameSetup {
       actor.animator = new Animator(this.game, actor as any, 0.3);
       actor.brain = new BrainAnimal(this.game, actor as any);
       actor.description = new Description(actor);
-      this.actorManager.spawnActor(actor, Layer.ACTOR);
+      this.actorManager.spawnActor(actor, addToSchedule);
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.mushroomCount; i++) {
       // MUSHROOM
       actor = {
         id: generateId(),
+        layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.landBiomes, 1, true)[0],
         spritePath: Tile.mushroom.spritePath,
         animationPath: Tile.mushroom.animationPath,
@@ -136,7 +139,7 @@ export class GameSetup {
       actor.animator = new Animator(this.game, actor as any, 2.25);
       actor.brain = new BrainAnimal(this.game, actor as any);
       actor.description = new Description(actor);
-      this.actorManager.spawnActor(actor, Layer.ACTOR);
+      this.actorManager.spawnActor(actor, addToSchedule);
     }
 
     this.userInterface.components.updateSideBarContent(
@@ -148,9 +151,9 @@ export class GameSetup {
   private spawnInitialPlants(): void {
     const quarter = Math.floor(GameSettings.options.spawn.inputs.treeCount / 4);
     for (let i = 0; i < GameSettings.options.spawn.inputs.treeCount; i++) {
-      let type: TreeSpeciesID;
+      let type: PlantSpeciesId;
       type =
-        RNG.getUniform() < 0.5 ? TreeSpeciesEnum.PINE : TreeSpeciesEnum.BIRCH;
+        RNG.getUniform() < 0.5 ? PlantSpeciesEnum.PINE : PlantSpeciesEnum.BIRCH;
       // type =
       //   i < quarter
       //     ? TreeSpeciesEnum.PINE
@@ -161,7 +164,11 @@ export class GameSetup {
       //     : TreeSpeciesEnum.MAPLE;
       // this.spawnTree(Tree, TreeSpecies.treeSpecies[type]);
       // this.spawnTree(TreeSpecies.treeSpecies[type]);
-      this.treeManager.spawn(TreeSpecies.treeSpecies[type]);
+      SystemTrees.spawnSpeciesAtRand(
+        PlantSpecies.plantSpecies[type],
+        this.game.map,
+        this.actorManager
+      );
     }
     for (let i = 0; i < GameSettings.options.spawn.inputs.shrubCount; i++) {
       this.shrubManager.spawn();

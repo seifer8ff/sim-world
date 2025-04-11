@@ -11,7 +11,7 @@ import { CachedTexture, getCachedTileTexture } from "../assets";
 import { Biome, Biomes } from "../biomes";
 import { Game } from "../game";
 import { Description, DescriptionBlock } from "../components/description";
-import { isActor } from "../entities/actor";
+import { isActor } from "../actor";
 
 export interface TileStats {
   height: number;

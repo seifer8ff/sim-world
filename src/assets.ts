@@ -3,7 +3,7 @@ import * as PIXI from "pixi.js";
 import { Tile, BaseTileKey } from "./tile";
 import { Season } from "./time-manager";
 import { Biome, BiomeId, Biomes } from "./biomes";
-import { TreeSpecies } from "./entities/tree/tree-species";
+import { PlantSpecies } from "./plant-species";
 
 export interface CachedTexture {
   url: string;
@@ -77,8 +77,8 @@ async function FetchAssetsManifest(url: string) {
   return manifest;
 }
 
-/** Initialise and start background loading of all assets */
-export async function InitAssets() {
+/** Initialise and start background loading of all assets that don't require renderer */
+export async function InitAssetsStage1() {
   initPixiOptions();
   console.log("Start loading assets...");
   // Load assets manifest
@@ -100,7 +100,13 @@ export async function InitAssets() {
   await Assets.backgroundLoadBundle(allBundles);
   processManualTiles();
   ProcessTilesetsIntoTiles();
-  TreeSpecies.processTreeSpecies();
+  // PlantSpecies.processSpecies();
+}
+
+/** generate assets that require render (i.e. custom textures using renderTextures) */
+
+export async function InitAssetsStage2(app: PIXI.Application) {
+  PlantSpecies.processSpecies(app);
 }
 
 export function initPixiOptions(): void {
@@ -113,15 +119,7 @@ export function initPixiOptions(): void {
 export function processManualTiles() {
   // for each manually defined tile, add it to the Tile object
   // this is for tiles that don't have a tileset
-  const manualTiles = [
-    Tile.mushroom,
-    Tile.shrub,
-    Tile.tree,
-    Tile.treeCanopy,
-    Tile.cow,
-    Tile.seagull,
-    Tile.sharkBlue,
-  ];
+  const manualTiles = [Tile.mushroom, Tile.cow, Tile.seagull, Tile.sharkBlue];
   manualTiles.forEach((tile) => {
     // generate a texture for the tile if it doesn't exist yet
     Tile.tiles[tile.id] = tile;

@@ -8,6 +8,7 @@ import { InputUtility } from "./input-utility";
 import TinyGesture from "tinygesture";
 import { Layer } from "./renderer";
 import {
+  generateId,
   indexToPosition,
   lerp,
   lerpEaseInOut,
@@ -17,12 +18,14 @@ import { HeightLayer, MapWorld } from "./map-world";
 import { TileStats } from "./web-components/tile-info";
 import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
-import { ActorBase, isActor } from "./entities/actor";
+import { ActorBase, isActor } from "./actor";
+import { SystemPointer } from "./system-pointer";
 
 export interface Viewport {
   width: number;
   height: number;
   center: Point;
+  tiles: number[]; // viewport tiles intersecting with the viewport
 }
 
 export interface PointerTarget {
@@ -34,8 +37,6 @@ export interface PointerTarget {
 export class Camera {
   public viewportPadded: Viewport;
   public viewportUnpadded: Viewport;
-  public viewportTilesPadded: number[];
-  public viewportTilesUnpadded: number[];
   public viewportTarget: Point | ActorBase;
   public pointerTarget: PointerTarget;
   private currentZoom: number;
@@ -76,8 +77,6 @@ export class Camera {
     this.keyMap[KEYS.VK_A] = 6; // left
     this.lastPivot = new Point(0, 0);
     this.lastZoom = this.currentZoom;
-    this.viewportTilesPadded = [];
-    this.viewportTilesUnpadded = [];
 
     this.momentum = {
       x: 0,
@@ -119,15 +118,30 @@ export class Camera {
     );
   }
 
-  public inViewport(x: number, y: number, unpadded: boolean = true): boolean {
-    let viewport = unpadded ? this.viewportUnpadded : this.viewportPadded;
+  public static inViewport(
+    x: number,
+    y: number,
+    layer: Layer,
+    viewport: Viewport
+  ) {
+    const halfWidth = viewport.width / 2;
+    const halfHeight = viewport.height / 2;
+
+    const viewportLeft = viewport.center.x - halfWidth;
+    const viewportRight = viewport.center.x + halfWidth;
+    const viewportTop = viewport.center.y - halfHeight;
+    const viewportBottom = viewport.center.y + halfHeight;
+
+    const terrainX = Tile.translate(x, layer, Layer.TERRAIN);
+    const terrainY = Tile.translate(y, layer, Layer.TERRAIN);
+
     return (
       x >= 0 &&
       y >= 0 &&
-      x > viewport.center.x - viewport.width / 2 &&
-      x < viewport.center.x + viewport.width / 2 &&
-      y > viewport.center.y - viewport.height / 2 &&
-      y < viewport.center.y + viewport.height / 2
+      terrainX >= viewportLeft &&
+      terrainX <= viewportRight &&
+      terrainY >= viewportTop &&
+      terrainY <= viewportBottom
     );
   }
 
@@ -178,15 +192,23 @@ export class Camera {
         this.viewportTarget = pos;
       }
     }
+    SystemPointer.spawnPointer(
+      pos,
+      this.game.actorManager,
+      this.pointerTarget.target
+    );
     this.ui.components.tileInfo.setContent(this.pointerTarget);
   }
 
   public clearPointerTarget() {
     this.ui.components.sideMenu.setActorTarget(null);
     this.ui.components.tileInfo.setContent(null);
-    this.game.renderer.removeFromCache(this.pointerTarget.position, Layer.UI);
     this.pointerTarget = null;
     this.viewportTarget = null;
+    SystemPointer.clearPointer(
+      this.game.actorManager.withPointer,
+      this.game.actorManager
+    );
   }
 
   public selectTileAt(
@@ -322,10 +344,8 @@ export class Camera {
     return true;
   }
 
-  private getViewportTiles(pad: boolean = false): number[] {
-    const { width, height, center } = pad
-      ? this.viewportPadded
-      : this.viewportUnpadded;
+  private getTilesForViewport(viewport: Viewport): number[] {
+    const { width, height, center } = viewport;
     const tiles: number[] = [];
     const halfWidth = Math.ceil(width / 2); // include any partial tiles
     const halfHeight = Math.ceil(height / 2);
@@ -351,18 +371,23 @@ export class Camera {
       (Tile.size * this.ui.application.stage.scale.x);
     const paddedWidthTiles = unpaddedWidthTiles + 15;
     const paddedHeightTiles = unpaddedHeightTiles + 15;
-    return {
+    const viewports = {
       unpadded: {
         width: Math.ceil(unpaddedWidthTiles) + 1,
         height: Math.ceil(unpaddedHeightTiles) + 1,
         center,
+        tiles: [],
       },
       padded: {
         width: Math.ceil(paddedWidthTiles),
         height: Math.ceil(paddedHeightTiles),
         center,
+        tiles: [],
       },
     };
+    viewports.unpadded.tiles = this.getTilesForViewport(viewports.unpadded); // unpadded tiles
+    viewports.padded.tiles = this.getTilesForViewport(viewports.padded); // padded tiles
+    return viewports;
   }
 
   private getViewportCenterTile(): Point {
@@ -615,18 +640,16 @@ export class Camera {
 
   private updateViewport() {
     // OLD VIEWPORT AND NEW VIEWPORT MUST MATCH (PADDED VS UNPADDED)
-    const oldTiles = new Set(this.viewportTilesUnpadded);
+    const oldTiles = new Set(this.viewportUnpadded?.tiles || []);
     const viewport = this.getViewport();
     this.viewportPadded = viewport.padded;
     this.viewportUnpadded = viewport.unpadded;
-    this.viewportTilesPadded = this.getViewportTiles(true);
-    this.viewportTilesUnpadded = this.getViewportTiles(false);
 
     // const enteredTiles: Point[] = [];
     const enteredTiles: number[] = [];
     let point: Point;
     // OLD VIEWPORT AND NEW VIEWPORT MUST MATCH (PADDED VS UNPADDED)
-    for (const tileIndex of this.viewportTilesUnpadded) {
+    for (const tileIndex of this.viewportUnpadded?.tiles || []) {
       if (!oldTiles.has(tileIndex)) {
         point = indexToPosition(tileIndex, Layer.TERRAIN);
         if (this.game.map.isPointInMap(point)) {

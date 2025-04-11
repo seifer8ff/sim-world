@@ -28,8 +28,12 @@ export class ManagerCollision {
   }
 
   public occupyTile(x: number, y: number, layer: Layer, id: number) {
-    const index = positionToIndex(x, y, layer);
-    this.actorCollisionGrid[index] = id;
+    if (this.layers.includes(layer)) {
+      const index = positionToIndex(x, y, layer);
+      this.actorCollisionGrid[index] = id;
+    } else {
+      console.warn("Tried to occupy tile on non-actor layer", layer);
+    }
   }
 
   public clearEntityTile(x: number, y: number, layer: Layer) {
@@ -50,18 +54,74 @@ export class ManagerCollision {
     if (this.isMapBlocked(x, y, originLayer)) {
       return true;
     }
-    let terrainX: number;
-    let terrainY: number;
+
+    const denseRatio = Tile.tileDensityRatio; // Assuming this represents the dense-to-non-dense ratio
+    let layerX: number;
+    let layerY: number;
 
     for (const layer of this.layers) {
-      terrainX = Tile.translate(x, originLayer, layer);
-      terrainY = Tile.translate(y, originLayer, layer);
-      if (this.isBlockedOnLayer(terrainX, terrainY, layer)) {
-        return true;
+      layerX = Tile.translate(x, originLayer, layer);
+      layerY = Tile.translate(y, originLayer, layer);
+      if (originLayer === Layer.TERRAIN && Tile.isDenseLayer(layer)) {
+        // Check all dense points within the non-dense point
+        for (let dx = 0; dx < denseRatio; dx++) {
+          for (let dy = 0; dy < denseRatio; dy++) {
+            if (this.isBlockedOnLayer(layerX + dx, layerY + dy, layer)) {
+              return true;
+            }
+          }
+        }
+      } else {
+        // For non-dense layers, check the single point
+        if (this.isBlockedOnLayer(layerX, layerY, layer)) {
+          return true;
+        }
       }
     }
     return false;
   }
+
+  // public isBlocked(
+  //   x: number,
+  //   y: number,
+  //   originLayer: Layer = Layer.TERRAIN
+  // ): boolean {
+  //   if (this.isMapBlocked(x, y, originLayer)) {
+  //     return true;
+  //   }
+  //   let layerX: number;
+  //   let layerY: number;
+
+  //   for (const layer of this.layers) {
+  //     layerX = Tile.translate(x, originLayer, layer);
+  //     layerY = Tile.translate(y, originLayer, layer);
+  //     if (this.isBlockedOnLayer(layerX, layerY, layer)) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // }
+
+  // public isBlocked(
+  //   x: number,
+  //   y: number,
+  //   originLayer: Layer = Layer.TERRAIN
+  // ): boolean {
+  //   if (this.isMapBlocked(x, y, originLayer)) {
+  //     return true;
+  //   }
+  //   let terrainX: number;
+  //   let terrainY: number;
+
+  //   for (const layer of this.layers) {
+  //     terrainX = Tile.translate(x, originLayer, layer);
+  //     terrainY = Tile.translate(y, originLayer, layer);
+  //     if (this.isBlockedOnLayer(terrainX, terrainY, layer)) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // }
 
   public isMapBlocked(
     x: number,

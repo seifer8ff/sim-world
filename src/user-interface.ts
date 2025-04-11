@@ -3,11 +3,11 @@ import { Game } from "./game";
 import { MessageLog } from "./message-log";
 import * as PIXI from "pixi.js";
 import { Layer } from "./renderer";
-import { Camera } from "./camera";
+import { Camera, PointerTarget } from "./camera";
 
 import { ManagerWebComponents } from "./manager-web-components";
 import { BiomeId } from "./biomes";
-import { isActor } from "./entities/actor";
+import { isActor } from "./actor";
 
 export class UserInterface {
   public application: PIXI.Application<PIXI.ICanvas>;
@@ -20,12 +20,8 @@ export class UserInterface {
   private keyMap: { [key: number]: number };
 
   public components: ManagerWebComponents;
-  private sprites: { [key: string]: string };
 
   constructor(private game: Game) {
-    this.sprites = {
-      selectionBox: "ui_tile_select",
-    };
     this.components = new ManagerWebComponents(game, this);
 
     this.gameContainer = document.getElementById("gameContainer");
@@ -50,6 +46,7 @@ export class UserInterface {
     );
     this.messageLog = new MessageLog(this.game);
     this.camera = new Camera(this.game, this);
+    globalThis.__PIXI_APP__ = this.application;
     this.initEventListeners();
   }
 
@@ -113,27 +110,7 @@ export class UserInterface {
     return code === KEYS.VK_RIGHT;
   }
 
-  updateSelectionBox(): void {
-    // TODO: refactor to selection box to lerp follow the target
-    if (this.camera.pointerTarget) {
-      if (isActor(this.camera.pointerTarget.target)) {
-        this.game.renderer.addToScene(
-          this.camera.pointerTarget.target.position,
-          Layer.UI,
-          PIXI.Sprite.from(this.sprites.selectionBox)
-        );
-      } else {
-        this.game.renderer.addToScene(
-          this.camera.pointerTarget.position,
-          Layer.UI,
-          PIXI.Sprite.from(this.sprites.selectionBox)
-        );
-      }
-    }
-  }
-
   renderUpdate(): void {
     this.components.updateTimeControl();
-    this.updateSelectionBox();
   }
 }

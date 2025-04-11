@@ -21,7 +21,7 @@ import { BiomeId, Biomes } from "./biomes";
 import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
 import { serialize } from "@shoelace-style/shoelace";
-import { ActorBase } from "./entities/actor";
+import { ActorBase } from "./actor";
 
 export class ManagerWebComponents {
   private timeControl: TimeControl;

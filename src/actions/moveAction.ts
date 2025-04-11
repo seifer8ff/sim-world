@@ -5,7 +5,7 @@ import { Layer } from "../renderer";
 import { MapWorld } from "../map-world";
 import { generateId } from "../misc-utility";
 import { GameSettings } from "../game-settings";
-import { ActorBase } from "../entities/actor";
+import { ActorBase } from "../actor";
 
 export class MoveAction implements Action {
   readonly id: number;
@@ -50,53 +50,35 @@ export class MoveAction implements Action {
           MapWorld.coordsToKey(this.actor.position.x, this.actor.position.y), // pos doesn't update until after anim
           oldPos,
           newPos,
-          () => {
-            // clear the old position in the collision manager
-            this.game.collisionManager.clearEntityTile(
-              this.actor.position.x,
-              this.actor.position.y,
-              Layer.ACTOR
-            );
-            // update the position of the sprite in the renderer's cache
-            // keeps the renderer's representation of the map in sync with the game
-            // otherwise, renderer will think sprite is still at old position
-            this.game.renderer.updateSpriteCachePosition(
-              this.actor.position,
-              this.targetPos,
-              Layer.ACTOR
-            );
-            // keep actor's position in sync with target position
-            this.actor.position = new Point(this.targetPos.x, this.targetPos.y);
-            // update collision
-            this.game.collisionManager.occupyTile(
-              this.targetPos.x,
-              this.targetPos.y,
-              Layer.ACTOR,
-              this.actor.id
-            );
-          },
+          () => this.move(),
           this.actor
         );
       } else {
-        // update collision
-        this.game.collisionManager.clearEntityTile(
-          this.actor.position.x,
-          this.actor.position.y,
-          Layer.ACTOR
-        );
-        // if no lerp, just update the sprite cache position
-        this.game.renderer.updateSpriteCachePosition(
-          this.actor.position,
-          this.targetPos,
-          Layer.ACTOR
-        );
-        // keep actor's position in sync with target position
-        this.actor.position = new Point(this.targetPos.x, this.targetPos.y);
+        // if no animation, just move the actor immediately
+        this.move();
       }
     }
 
     return Promise.resolve({
       movementVector: movementVector,
     });
+  }
+
+  private move() {
+    // clear the old position in the collision manager
+    this.game.collisionManager.clearEntityTile(
+      this.actor.position.x,
+      this.actor.position.y,
+      this.actor.layer
+    );
+    // update collision
+    this.game.collisionManager.occupyTile(
+      this.targetPos.x,
+      this.targetPos.y,
+      this.actor.layer,
+      this.actor.id
+    );
+    // keep actor's position in sync with target position
+    this.actor.position = new Point(this.targetPos.x, this.targetPos.y);
   }
 }

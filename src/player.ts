@@ -1,18 +1,18 @@
 import { KEYS, DIRS, Path, RNG } from "rot-js";
-import { Game } from "../game";
-import { Point } from "../point";
-import { InputUtility } from "../input-utility";
-import { Tile } from "../tile";
-import { WaitAction } from "../actions/waitAction";
-import { Action } from "../actions/action";
+import { Game } from "./game";
+import { Point } from "./point";
+import { InputUtility } from "./input-utility";
+import { Tile } from "./tile";
+import { WaitAction } from "./actions/waitAction";
+import { Action } from "./actions/action";
 import TypeIcon from "../shoelace/assets/icons/person-vcard.svg";
 import GoalIcon from "../shoelace/assets/icons/geo-alt.svg";
 import ActionIcon from "../shoelace/assets/icons/sign-turn-slight-right.svg";
 import { Sprite, AnimatedSprite, Graphics, Assets } from "pixi.js";
-import { PointerTarget } from "../camera";
-import { generateId } from "../misc-utility";
-import { Renderable } from "../renderer";
-import { GameSettings } from "../game-settings";
+import { PointerTarget } from "./camera";
+import { generateId } from "./misc-utility";
+import { Renderable } from "./renderer";
+import { GameSettings } from "./game-settings";
 
 export class Player {
   id: number;

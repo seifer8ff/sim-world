@@ -8,7 +8,7 @@ import {
   lerpEaseOut,
 } from "./misc-utility";
 import { Point } from "./point";
-import { ActorBase } from "./entities/actor";
+import { ActorBase } from "./actor";
 
 export interface Animation {
   id: number;
@@ -111,12 +111,8 @@ export class ManagerAnimation {
         y = lerpEaseInOut(percent, oldPos.y, newPos.y);
       }
 
-      this.game.renderer.moveCachedSpriteTransform(
-        animation.tileKey,
-        Layer.ACTOR,
-        x,
-        y
-      );
+      // update sprite position as the lerp runs
+      animation.actor.sprite.position.set(x, y);
     }
   }
 }

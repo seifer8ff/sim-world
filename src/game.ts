@@ -9,16 +9,17 @@ import Simplex from "rot-js/lib/noise/simplex";
 import Noise from "rot-js/lib/noise/noise";
 import { ManagerAnimation } from "./manager-animation";
 import MainLoop from "mainloop.js";
-import { InitAssets } from "./assets";
+import { InitAssetsStage1, InitAssetsStage2 } from "./assets";
 import { GameSettings } from "./game-settings";
 import { ManagerActor } from "./manager-actors";
-import { SystemTreeRenderer } from "./system-tree-renderer";
+import { SystemTrees } from "./system-trees";
 import { ManagerCollision } from "./manager-collision";
-import { ActorBase } from "./entities/actor";
+import { ActorBase } from "./actor";
 import { SystemAnimated } from "./system-animated";
 import { SystemStatic } from "./system-static";
 import { SystemPathfinder } from "./system-pathfinder";
 import { GameSetup } from "./game-setup";
+import { SystemPointer } from "./system-pointer";
 
 export class Game {
   public settings: GameSettings;
@@ -57,9 +58,10 @@ export class Game {
   }
 
   public async Init(): Promise<boolean> {
-    await InitAssets();
+    await InitAssetsStage1();
     this.gameState.reset();
     await this.userInterface.init();
+    await InitAssetsStage2(this.userInterface.application);
 
     return true;
   }
@@ -165,51 +167,20 @@ export class Game {
         })
       );
 
-      // return Promise.all(
-      //   actors.map((actor) => {
-      //     if (actor && actor?.plan) {
-      //       return actor?.plan();
-      //     }
-      //   })
-      // ).then(async () => {
-      //   actors.forEach((actor) => {
-      //     if (actor?.action) {
-      //       // console.log(`actor ${actor.name} is ${actor.action.name}`);
-      //       this.timeManager.setDuration(actor.action.durationInTurns);
-      //     }
-      //   });
-
-      //   await Promise.all(
-      //     actors.map((actor) => {
-      //       if (actor?.action) {
-      //         return actor?.act();
-      //       }
-      //     })
-      //   );
-
       // grow some of the shrubs
       let maxGrowth = 55;
-      for (const shrub of this.actorManager.groundCover) {
+      for (const shrub of this.actorManager.groundCoverGrowth) {
         if (maxGrowth <= 0) {
           break;
+        }
+        if (Math.random() < 0.7) {
+          //  chance to skip
+          continue;
         }
         if (this.actorManager.shrubManager.growShrub(shrub)) {
           maxGrowth--;
         }
       }
-
-      // grow all of the trees
-      // for (const tree of this.actorManager.allTrees) {
-      //   // this.actorManager.treeManager.growTree(tree);
-      // }
-
-      // clear cache for dynamic layers:
-      // - terrain layer's cache is handled at lower level by marking tiles as dirty
-      // - entity layer's cache is handled at lower level to allow lerp animations
-      this.renderer.clearCache(Layer.GROUNDCOVER);
-      this.renderer.clearCache(Layer.SMALLACTOR);
-      this.renderer.clearCache(Layer.CANOPY);
-      // this.renderer.clearCache(Layer.UI);
 
       this.map.lightManager.turnUpdate();
       this.map.shadowMap.turnUpdate();
@@ -221,38 +192,13 @@ export class Game {
       this.map.lightManager.updateDynamicLighting();
       this.map.lightManager.recalculateDynamicLighting();
 
+      const viewportUnpadded = this.userInterface.camera.viewportUnpadded;
+
       // update cache for entities and plants
       SystemAnimated.setAnimatorSpeed(
         this.actorManager.withAnimator,
         this.timeManager.timeScale
       );
-      SystemAnimated.drawAnimated(
-        this.actorManager.withAnimator,
-        this.renderer,
-        this.userInterface.camera.viewportUnpadded
-      );
-      SystemStatic.drawTile(this.actorManager.withStaticSprite, this.renderer);
-      SystemTreeRenderer.drawTrunkBase(
-        this.actorManager.withTrunkBase,
-        this.renderer,
-        this.userInterface.camera.viewportUnpadded
-      );
-      SystemTreeRenderer.drawCanopy(
-        this.actorManager.withCanopy,
-        this.renderer,
-        this.userInterface.camera.viewportUnpadded
-      );
-      // this.drawShrubs();
-      // this.drawTrees();
-
-      for (const actor of this.actorManager.allTrees) {
-        // console.log("tree actor", actor);
-      }
-
-      //
-      // important that this comes last
-      // run a tint pass on all actors (entities, trees, etc)
-      this.map.lightManager.tintActors(this.actorManager.withAnimator, true);
     });
   }
 
@@ -260,15 +206,13 @@ export class Game {
     if (GameSettings.options.toggles.enableStats) {
       this.settings.stats?.begin();
     }
-    this.renderer.clearCache(Layer.UI); // clear UI cache during render since it updates outside of game loop
 
     this.map.draw();
 
     this.userInterface.camera.renderUpdate(interpPercent);
 
-    let viewport = this.userInterface.camera.viewportUnpadded;
-    let viewportTiles: number[] =
-      this.userInterface.camera.viewportTilesUnpadded;
+    const viewport = this.userInterface.camera.viewportUnpadded;
+    const lightManager = this.map.lightManager;
 
     if (this.gameState.stage === Stages.Play) {
       this.timeManager.renderUpdate(this.turnAnimDelayCounter);
@@ -282,7 +226,7 @@ export class Game {
       }
 
       if (GameSettings.options.toggles.enableGlobalLights) {
-        this.map.lightManager.renderUpdate(interpPercent, viewportTiles);
+        this.map.lightManager.renderUpdate(interpPercent, viewport.tiles);
       }
 
       if (GameSettings.options.toggles.enableAnimations) {
@@ -290,42 +234,52 @@ export class Game {
       }
     }
 
+    SystemPointer.updatePointerPosition(this.actorManager.withPointer);
+    SystemPointer.renderPointer(
+      this.actorManager.withPointer,
+      this.renderer,
+      viewport
+    );
     this.userInterface.renderUpdate();
     this.userInterface.components.renderUpdate();
 
     if (this.gameState.stage === Stages.Play) {
-      // console.log(
-      //   viewportTileCount,
-      //   GameSettings.options.hideDenseLayersTileCount
-      // );
+      this.renderer.clearSceneLayers([
+        Layer.TERRAIN,
+        Layer.GROUNDCOVER,
+        Layer.SMALLACTOR,
+        Layer.ACTOR,
+      ]);
+      SystemStatic.renderTerrainTiles(
+        viewport.tiles,
+        this.renderer,
+        lightManager,
+        this.map
+      );
+      SystemStatic.renderUI(this.actorManager.withUI, this.renderer, viewport);
       // at lower zoom levels, skip rendering the dense layers to improve performance
       if (
-        viewportTiles.length > GameSettings.options.hideDenseLayersTileCount
+        viewport.tiles.length < GameSettings.options.hideDenseLayersTileCount
       ) {
-        this.renderer.clearSceneLayers([
-          Layer.GROUNDCOVER,
-          Layer.SMALLACTOR,
-          Layer.CANOPY,
-        ]);
-        this.renderer.renderChunkedLayers(
-          [Layer.TERRAIN, Layer.ACTOR, Layer.UI],
-          viewport.width,
-          viewport.height,
-          viewport.center
+        SystemStatic.renderGroundCover(
+          this.actorManager.groundCover,
+          this.renderer,
+          lightManager,
+          viewport
         );
-      } else {
-        this.renderer.renderChunkedLayers(
-          [
-            Layer.TERRAIN,
-            Layer.GROUNDCOVER,
-            Layer.SMALLACTOR,
-            Layer.ACTOR,
-            Layer.CANOPY,
-            Layer.UI,
-          ],
-          viewport.width,
-          viewport.height,
-          viewport.center
+
+        SystemTrees.renderTrees(
+          this.actorManager.allTrees,
+          this.renderer,
+          lightManager,
+          viewport
+        );
+
+        SystemAnimated.renderAnimated(
+          this.actorManager.withAnimator,
+          this.renderer,
+          this.map.lightManager,
+          viewport
         );
       }
     }

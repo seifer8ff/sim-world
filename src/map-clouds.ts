@@ -81,7 +81,7 @@ export class MapClouds {
     if (!GameSettings.options.toggles.enableClouds) {
       return;
     }
-    const tiles = this.game.userInterface.camera.viewportTilesPadded;
+    const tiles = this.game.userInterface.camera.viewportUnpadded.tiles;
     const biomeIds = tiles.map((tileIndex) => this.map.biomeMap.get(tileIndex));
     this.worker.postMessage({
       type: MessageType.UPDATE,
@@ -105,7 +105,7 @@ export class MapClouds {
       },
     });
     this.interpolateCloudState(
-      this.game.userInterface.camera.viewportTilesUnpadded
+      this.game.userInterface.camera.viewportUnpadded.tiles
     );
   }
 

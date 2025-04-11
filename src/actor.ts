@@ -1,12 +1,12 @@
-import { Point } from "../point";
-import { Tile } from "../tile";
-import { Layer, Renderable } from "../renderer";
-import { TreeSpeciesID } from "./tree/tree-species";
+import { Point } from "./point";
+import { Tile } from "./tile";
+import { Layer, Renderable } from "./renderer";
+import { PlantSpeciesId } from "./plant-species";
 import { AnimatedSprite, Sprite } from "pixi.js";
-import { AnimationMap, Animator } from "../components/animator";
-import { Brain } from "../brains/brain";
-import { Description } from "../components/description";
-import { BiomeId } from "../biomes";
+import { AnimationMap, Animator } from "./components/animator";
+import { Brain } from "./brains/brain";
+import { Description } from "./components/description";
+import { BiomeId } from "./biomes";
 
 export interface WithID {
   id: number;
@@ -35,7 +35,7 @@ export interface WithDescription {
   description: Description;
 }
 
-export interface WithSprite {
+export interface WithSprite extends WithPosition {
   sprite: Sprite | AnimatedSprite;
   spritePath: string; // path to the sprite image file
 }
@@ -68,15 +68,16 @@ export interface WithGrowth {
 }
 
 export interface WithSpecies {
-  species?: TreeSpeciesID;
+  species?: PlantSpeciesId;
 }
 
-export interface WithTrunkBase {
-  trunkBaseSprite: string;
+export interface isUi {
+  isUi: boolean;
 }
 
-export interface WithCanopy {
-  canopySprite: string;
+export interface isPointer extends isUi, WithPosition {
+  isPointer: boolean;
+  pointerTarget?: ActorBase; // the actor this pointer is pointing to
 }
 
 export type ActorBase = Partial<
@@ -93,8 +94,8 @@ export type ActorBase = Partial<
     WithGrowth &
     WithSpecies &
     CanFruit &
-    WithTrunkBase &
-    WithCanopy
+    isUi &
+    isPointer
 >;
 
 export enum ComponentType {
@@ -118,9 +119,10 @@ export enum ComponentType {
   path = "path",
   range = "range",
   validBiomes = "validBiomes",
-  trunkBaseSprite = "trunkBaseSprite",
-  canopySprite = "canopySprite",
   fruitCount = "fruitCount",
+  isUi = "isUi",
+  isPointer = "isPointer",
+  pointerTarget = "pointerTarget",
 }
 
 export function isActor(object: any): object is ActorBase {

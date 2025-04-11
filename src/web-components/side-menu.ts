@@ -17,7 +17,7 @@ import PersonIcon from "../shoelace/assets/icons/person.svg";
 import HandleIcon from "../shoelace/assets/icons/grip-vertical.svg";
 import { SlIconButton } from "@shoelace-style/shoelace";
 import { CachedTexture } from "../assets";
-import { ActorBase, WithID } from "../entities/actor";
+import { ActorBase, WithID } from "../actor";
 
 export interface MenuTab {
   name: TopLevelMenu;
