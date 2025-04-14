@@ -53,8 +53,6 @@ export class Game {
     this.userInterface = new UserInterface(this);
     this.renderer = new Renderer(this);
     this.actorManager = new ManagerActor(this);
-    this.collisionManager = new ManagerCollision(this);
-    this.pathfinder = new SystemPathfinder(this);
   }
 
   public async Init(): Promise<boolean> {
@@ -94,6 +92,11 @@ export class Game {
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height
     );
+    this.collisionManager = new ManagerCollision(this);
+    this.pathfinder = new SystemPathfinder(this);
+    // let a few turns pass, do any world setup needed
+    const gameSetup = new GameSetup(this);
+    gameSetup.init();
     return true;
   }
 
@@ -114,9 +117,7 @@ export class Game {
   private mainLoop(deltaTime: number) {
     if (this.gameState.stage === Stages.Play) {
       if (!this.gameState.worldSetupComplete) {
-        // let a few turns pass, do any world setup needed
-        const gameSetup = new GameSetup(this);
-        gameSetup.init();
+        this.generateWorld();
         return;
       }
       this.uiLoop(deltaTime);

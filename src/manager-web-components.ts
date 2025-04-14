@@ -134,7 +134,6 @@ export class ManagerWebComponents {
             );
             this.game.settings.loadSettings();
             this.game.gameState.changeStage(Stages.Play);
-            this.game.generateWorld();
           } catch (error) {
             console.log("error on form submit", e, error);
           }

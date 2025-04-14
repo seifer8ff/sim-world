@@ -941,42 +941,65 @@ export class MapWorld {
   ): Point[] {
     let result: Point[] = [];
     let randPos: Point;
-    let randPositions: Point[];
+    let translatedPos: Point;
     const desiredBiomesSet = new Set(biomeTypes);
     let attempts = 0;
 
+    // loop until we have enough results, or we've tried too many times
     while (result.length < quantity && attempts < maxAttempts) {
-      randPositions = [];
+      // get a random point
       randPos = new Point(
         Math.floor(Math.random() * GameSettings.options.gameSize.width),
         Math.floor(Math.random() * GameSettings.options.gameSize.height)
       );
 
+      // check if the position is valid
+      // repeat if the position isn't valid
       if (desiredBiomesSet.has(this.getBiome(randPos.x, randPos.y).id)) {
-        randPositions.push(randPos);
-        for (let pos of randPositions) {
-          if (
-            !unblockedOnly ||
-            !this.game.collisionManager.isBlocked(pos.x, pos.y)
-          ) {
-            // plants have a dense tile grid, so add all possible dense points
-            // TODO: check if all dense points are passable before adding
-            if (isDenseLayer) {
-              pos = Tile.translatePoint(pos, Layer.TERRAIN, Layer.SMALLACTOR);
-              for (let x = 0; x < Tile.tileDensityRatio; x++) {
-                for (let y = 0; y < Tile.tileDensityRatio; y++) {
-                  result.push(new Point(pos.x + x, pos.y + y));
-                }
+        if (isDenseLayer) {
+          // convert everything to a dense tile position
+          translatedPos = Tile.translatePoint(
+            randPos,
+            Layer.TERRAIN,
+            Layer.SMALLACTOR
+          );
+          //check each dense tile position
+          for (let x = 0; x < Tile.tileDensityRatio; x++) {
+            for (let y = 0; y < Tile.tileDensityRatio; y++) {
+              // check collision
+              if (
+                unblockedOnly &&
+                !this.game.collisionManager.isBlocked(
+                  translatedPos.x,
+                  translatedPos.y,
+                  Layer.SMALLACTOR
+                )
+              ) {
+                result.push(
+                  new Point(translatedPos.x + x, translatedPos.y + y)
+                );
+                // no need to check for collision
+              } else if (!unblockedOnly) {
+                result.push(
+                  new Point(translatedPos.x + x, translatedPos.y + y)
+                );
               }
-            } else {
-              result.push(pos);
             }
+          }
+        } else {
+          // non-dense layer, just add the position if valid
+          if (
+            unblockedOnly &&
+            !this.game.collisionManager.isBlocked(randPos.x, randPos.y)
+          ) {
+            result.push(randPos);
+          } else if (!unblockedOnly) {
+            result.push(randPos);
           }
         }
       }
       attempts++;
     }
-
     return shuffle(result);
   }
 

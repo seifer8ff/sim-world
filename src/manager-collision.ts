@@ -16,6 +16,7 @@ export class ManagerCollision {
   }
 
   private initGrid() {
+    this.layers = [Layer.ACTOR, Layer.SMALLACTOR];
     const layerCount = Layer.UI + 1;
     let gridSize =
       GameSettings.options.gameSize.width *
@@ -24,7 +25,6 @@ export class ManagerCollision {
       Tile.tileDensityRatio; // account for dense grid, like for plants
     gridSize *= layerCount; // account for each layer
     this.actorCollisionGrid = new Int32Array(gridSize);
-    this.layers = [Layer.ACTOR, Layer.SMALLACTOR];
   }
 
   public occupyTile(x: number, y: number, layer: Layer, id: number) {
@@ -55,7 +55,7 @@ export class ManagerCollision {
       return true;
     }
 
-    const denseRatio = Tile.tileDensityRatio; // Assuming this represents the dense-to-non-dense ratio
+    const denseRatio = Tile.tileDensityRatio;
     let layerX: number;
     let layerY: number;
 
@@ -80,48 +80,6 @@ export class ManagerCollision {
     }
     return false;
   }
-
-  // public isBlocked(
-  //   x: number,
-  //   y: number,
-  //   originLayer: Layer = Layer.TERRAIN
-  // ): boolean {
-  //   if (this.isMapBlocked(x, y, originLayer)) {
-  //     return true;
-  //   }
-  //   let layerX: number;
-  //   let layerY: number;
-
-  //   for (const layer of this.layers) {
-  //     layerX = Tile.translate(x, originLayer, layer);
-  //     layerY = Tile.translate(y, originLayer, layer);
-  //     if (this.isBlockedOnLayer(layerX, layerY, layer)) {
-  //       return true;
-  //     }
-  //   }
-  //   return false;
-  // }
-
-  // public isBlocked(
-  //   x: number,
-  //   y: number,
-  //   originLayer: Layer = Layer.TERRAIN
-  // ): boolean {
-  //   if (this.isMapBlocked(x, y, originLayer)) {
-  //     return true;
-  //   }
-  //   let terrainX: number;
-  //   let terrainY: number;
-
-  //   for (const layer of this.layers) {
-  //     terrainX = Tile.translate(x, originLayer, layer);
-  //     terrainY = Tile.translate(y, originLayer, layer);
-  //     if (this.isBlockedOnLayer(terrainX, terrainY, layer)) {
-  //       return true;
-  //     }
-  //   }
-  //   return false;
-  // }
 
   public isMapBlocked(
     x: number,
