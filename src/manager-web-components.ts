@@ -13,15 +13,16 @@ import { UtilityActions } from "./web-components/utility-actions";
 import { IndicatorSun } from "./web-components/indicator-sun";
 import { IndicatorTileSelection } from "./web-components/indicator-tile-selection";
 import { UserInterface } from "./user-interface";
-import { getCachedTileTexture } from "./assets";
+import { getTextureURL } from "./assets";
 import OverlayIcon from "./shoelace/assets/icons/layers-half.svg";
-import { Sprite } from "pixi.js";
+import { Texture } from "pixi.js";
 import { BaseTileKey, Tile } from "./tile";
 import { BiomeId, Biomes } from "./biomes";
 import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
 import { serialize } from "@shoelace-style/shoelace";
 import { ActorBase } from "./actor";
+import { SystemStatic } from "./system-static";
 
 export class ManagerWebComponents {
   private timeControl: TimeControl;
@@ -234,7 +235,7 @@ export class ManagerWebComponents {
       this.sideMenu.setTabContent(tabName, actorMenuItems);
     } else if (tabName === "Build") {
       const buildMenuItems = content.map(
-        (buildOption: { name: string; iconPath: string; id: BiomeId }) => {
+        (buildOption: { name: string; iconTexture: Texture; id: BiomeId }) => {
           return this.mapBuildMenuItem(buildOption);
         }
       );
@@ -245,10 +246,10 @@ export class ManagerWebComponents {
   public mapEntityToMenuItem(actor: ActorBase): MenuItem {
     // use regex to select "mushroom_00_walk_14x18",
     // out of "sprites/mushroom_00_walk_14x18/mushroom_00_walk_14x18.json",
-    const spritePath = actor.spritePath;
+    const iconTexture: Texture = SystemStatic.getIconForSpecies(actor.species);
     return {
       id: `${actor.id}`,
-      icon: getCachedTileTexture(spritePath),
+      icon: getTextureURL(iconTexture),
       clickHandler: () => {
         console.log(`clicked on ${actor.id}`);
         this.ui.camera.setPointerTarget(actor.position, actor, true);
@@ -260,17 +261,19 @@ export class ManagerWebComponents {
 
   public mapBuildMenuItem(option: {
     name: string;
-    iconPath: string;
+    // iconPath: string;
+    iconTexture: Texture;
     id: string;
   }): MenuItem {
     return {
       id: `${option.name}`,
-      icon: getCachedTileTexture(option.iconPath),
+      icon: getTextureURL(option.iconTexture),
       clickHandler: () => {
-        const tile =
-          Tile.Tilesets[option.id as BiomeId][this.game.timeManager.season][
-            BaseTileKey
-          ];
+        const tile = Tile.getTileId(
+          option.id as BiomeId,
+          this.game.timeManager.season,
+          BaseTileKey
+        );
 
         this.game.map.setTile(
           this.ui.camera.pointerTarget.position.x,

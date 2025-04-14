@@ -38,7 +38,7 @@ export class Renderer {
   );
   public smallActorLayer = new PIXI.Container();
   public actorLayer = new PIXI.Container();
-  public uiLayer = new PIXI.Container<PIXI.Sprite | PIXI.AnimatedSprite>();
+  public uiLayer = new PIXI.Container();
 
   constructor(private game: Game) {
     PIXI.settings.ROUND_PIXELS = true;

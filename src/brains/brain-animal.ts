@@ -8,15 +8,15 @@ import { WanderAction } from "../actions/wanderAction";
 import {
   ActorBase,
   CanFruit,
-  WithAnimator,
+  WithAnimation,
   WithID,
   WithPathing,
   WithPosition,
 } from "../actor";
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
-import { Animator } from "../components/animator";
 import { Tile } from "../tile";
+import { SystemAnimated } from "../system-animated";
 
 export class BrainAnimal implements Brain {
   action: Action | null;
@@ -24,7 +24,11 @@ export class BrainAnimal implements Brain {
 
   constructor(
     private game: Game,
-    public actor: ActorBase & WithID & WithPosition & WithPathing & WithAnimator
+    public actor: ActorBase &
+      WithID &
+      WithPosition &
+      WithPathing &
+      WithAnimation
   ) {
     this.action = null;
     this.goal = null;
@@ -133,7 +137,7 @@ export class BrainAnimal implements Brain {
       .run()
       .then((res: { movementVector: [number, number] }) => {
         // face the sprite/anim to the direction of movement
-        Animator.updateFacing(res?.movementVector, this.actor.animator);
+        SystemAnimated.updateFacing(this.actor, res?.movementVector);
 
         if (this.goal === this.action) {
           // goal completed, pick a new one next turn

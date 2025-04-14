@@ -70,7 +70,7 @@ export class Autotile {
   ): boolean {
     const key = `${x},${y}`;
     const tileIndex = mapObject[key];
-    if ((tileIndex as any) == BaseTileKey) {
+    if (tileIndex == BaseTileKey) {
       console.log(`tileIndex for ${key} is ${tileIndex}`);
     }
     if (tileIndex === 47) {

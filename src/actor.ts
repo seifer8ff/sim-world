@@ -1,18 +1,21 @@
 import { Point } from "./point";
 import { Tile } from "./tile";
-import { Layer, Renderable } from "./renderer";
-import { PlantSpeciesId } from "./plant-species";
+import { Layer } from "./renderer";
+import { SpeciesId } from "./species";
 import { AnimatedSprite, Sprite } from "pixi.js";
-import { AnimationMap, Animator } from "./components/animator";
 import { Brain } from "./brains/brain";
 import { Description } from "./components/description";
 import { BiomeId } from "./biomes";
+import { AnimationMap, BaseAnimationKey } from "./components/animation-map";
+import { AnimId } from "./system-animated";
+
+export type ActorTypeId = SpeciesId | AnimId; // lookup id for textures
 
 export interface WithID {
   id: number;
 }
 
-export interface WithName {
+export interface WithName extends WithID {
   name?: string;
 }
 
@@ -20,12 +23,16 @@ export type CanFruit = {
   fruitCount: number; // number of fruits currently available on the actor
 };
 
-export interface WithPosition {
+export interface WithLayer extends WithID {
+  layer: Layer; // the layer this actor is on (e.g. GROUNDCOVER, TREES, etc.)
+}
+
+export interface WithPosition extends WithLayer {
   position: Point;
   collider?: boolean;
 }
 
-export interface WithPathing {
+export interface WithPathing extends WithPosition {
   path: Point[]; // current path to action.target
   range: number; // range of movement
   validBiomes?: BiomeId[]; // biomes actor can traverse. TODO: modify movement cost based on biome
@@ -37,29 +44,22 @@ export interface WithDescription {
 
 export interface WithSprite extends WithPosition {
   sprite: Sprite | AnimatedSprite;
-  spritePath: string; // path to the sprite image file
+  spritePath?: string; // path to the sprite image file
 }
 
-export interface WithLayer {
-  layer: Layer; // the layer this actor is on (e.g. GROUNDCOVER, TREES, etc.)
-}
-
-export interface WithTile extends WithLayer {
+export interface WithTile extends WithPosition {
   tile: number; // tile index. Used in rendering tilemaps to retrieve Tile.textures[tile]
 }
 
-export interface WithBrain {
+export interface WithBrain extends WithPosition {
   brain: Brain; // special complex component in charge of AI/planning
 }
 
-export interface WithAnimator {
-  animator: Animator; // class that handles playing animations for the actor
+export interface WithAnimation extends WithSprite {
+  animId: ActorTypeId; // the id to lookup the anim's texture set, matches speciesId if it exists
   animationMap: AnimationMap; // map of animation keys to a list of animation names
-  animationPath: string; // path to the animation JSON file
-}
-
-export interface WithRenderable {
-  renderable?: Renderable;
+  baseAnimSpeed: number; // the baseline speed to animate the actor, modified by timescale
+  currentAnimation: BaseAnimationKey; // the current animation being played
 }
 
 export interface WithGrowth {
@@ -68,7 +68,7 @@ export interface WithGrowth {
 }
 
 export interface WithSpecies {
-  species?: PlantSpeciesId;
+  species?: SpeciesId;
 }
 
 export interface isUi {
@@ -88,9 +88,8 @@ export type ActorBase = Partial<
     WithDescription &
     WithTile &
     WithSprite &
-    WithAnimator &
+    WithAnimation &
     WithBrain &
-    WithRenderable &
     WithGrowth &
     WithSpecies &
     CanFruit &
@@ -106,14 +105,9 @@ export enum ComponentType {
   collider = "collider",
   tile = "tile",
   layer = "layer",
-  renderable = "renderable",
   species = "species",
   canGrow = "canGrow",
   growthStep = "growthStep",
-  trunk = "trunk",
-  trunkTextureIndex = "trunkTextureIndex",
-  animator = "animator",
-  animatedTile = "animatedTile",
   sprite = "sprite",
   brain = "brain",
   path = "path",
@@ -123,8 +117,18 @@ export enum ComponentType {
   isUi = "isUi",
   isPointer = "isPointer",
   pointerTarget = "pointerTarget",
+  animId = "animId",
+  animationMap = "animationMap",
+  baseAnimSpeed = "baseAnimSpeed",
+  currentAnimation = "currentAnimation",
 }
 
 export function isActor(object: any): object is ActorBase {
-  return object && "id" in object && "position" in object;
+  return typeof object === "object" && "id" in object && "position" in object;
+}
+
+export function isAnimated(object: any): object is ActorBase & WithAnimation {
+  return (
+    typeof object === "object" && "animId" in object && "animationMap" in object
+  );
 }

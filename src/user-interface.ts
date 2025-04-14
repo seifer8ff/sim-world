@@ -2,12 +2,9 @@ import { KEYS } from "rot-js/lib/index";
 import { Game } from "./game";
 import { MessageLog } from "./message-log";
 import * as PIXI from "pixi.js";
-import { Layer } from "./renderer";
-import { Camera, PointerTarget } from "./camera";
-
+import { Camera } from "./camera";
 import { ManagerWebComponents } from "./manager-web-components";
 import { BiomeId } from "./biomes";
-import { isActor } from "./actor";
 
 export class UserInterface {
   public application: PIXI.Application<PIXI.ICanvas>;
@@ -71,18 +68,23 @@ export class UserInterface {
   }
 
   public async initializeBuildTools(): Promise<boolean> {
-    const options: { name: string; iconPath: string; id: BiomeId }[] = [
+    // TODO: better way of loading icon
+    const options: { name: string; iconPath: PIXI.Texture; id: BiomeId }[] = [
       {
         name: "Moist Dirt",
-        iconPath: "moistdirt_spring_sandydirt_00",
+        iconPath: PIXI.Cache.get("moistdirt_spring_sandydirt_00"),
         id: "moistdirt",
       },
       {
         name: "Ocean",
-        iconPath: "ocean_spring_moistdirt_00",
+        iconPath: PIXI.Cache.get("ocean_spring_moistdirt_00"),
         id: "ocean",
       },
-      { name: "Snow", iconPath: "snow_base", id: "snowmoistdirt" },
+      {
+        name: "Snow",
+        iconPath: PIXI.Cache.get("snow_base"),
+        id: "snowmoistdirt",
+      },
     ];
     this.components.updateSideBarContent("Build", options);
     return true;

@@ -2,19 +2,42 @@ import { ActorBase } from "./actor";
 import { Query } from "miniplex";
 import { Layer, Renderer } from "./renderer";
 import { Camera, Viewport } from "./camera";
-import { GameSettings } from "./game-settings";
 import { Tile } from "./tile";
 import { indexToPosition } from "./misc-utility";
 import { LightManager, RGBAColor } from "./light-manager";
 import { Texture } from "pixi.js";
 import { MapWorld } from "./map-world";
 import { Color as ColorType } from "rot-js/lib/color";
-import { PlantSpecies } from "./plant-species";
-import { SystemTrees } from "./system-trees";
+import { Species, SpeciesId } from "./species";
+import { RNG } from "rot-js";
+import { IconLayer } from "./data-actors";
 
 // handle drawing not animated sprites
 export class SystemStatic {
+  public static textures: {
+    [key in SpeciesId]?: { [key in Layer]?: Texture[] };
+  } = {};
+
   constructor() {}
+
+  public static getTextureFor(
+    species: Species,
+    layer: Layer | IconLayer,
+    index?: number
+  ): Texture {
+    if (!species.spriteSet[layer]) return null;
+    if (index === undefined) {
+      index = RNG.getUniformInt(0, species.spriteSet[layer].length - 1);
+    }
+    return SystemStatic.textures[species.id][layer][index];
+  }
+
+  public static getIconForSpecies(speciesId: SpeciesId): Texture {
+    return SystemStatic.getTextureFor(
+      Species.allSpecies[speciesId],
+      IconLayer.ICON
+    );
+  }
 
   public static renderTerrainTiles(
     tileIds: number[],
@@ -65,12 +88,10 @@ export class SystemStatic {
     const groundCoverLayer = renderer.groundCoverLayer[0];
     let tileTexture: Texture | undefined = undefined;
     let tint: ColorType;
-    let fullSpecies: PlantSpecies;
 
     for (const { position, layer, species } of actors) {
-      fullSpecies = PlantSpecies.plantSpecies[species];
-      tileTexture = PlantSpecies.getTextureFor(
-        PlantSpecies.plantSpecies[species],
+      tileTexture = SystemStatic.getTextureFor(
+        Species.allSpecies[species],
         Layer.GROUNDCOVER
       );
       if (!tileTexture) continue;

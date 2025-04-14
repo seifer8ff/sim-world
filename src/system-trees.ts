@@ -1,8 +1,8 @@
 import { ActorBase, WithID, WithPosition } from "./actor";
-import { PlantSpecies, PlantSpeciesEnum } from "./plant-species";
+import { Species } from "./species";
 import { generateId, inverseLerp } from "./misc-utility";
-import { Color, RNG } from "rot-js";
-import { Sprite, Texture } from "pixi.js";
+import { Color } from "rot-js";
+import { Sprite } from "pixi.js";
 import { Point } from "./point";
 import { Layer, Renderer } from "./renderer";
 import { Tile } from "./tile";
@@ -14,13 +14,14 @@ import { Camera, Viewport } from "./camera";
 import { BiomeId, Biomes } from "./biomes";
 import { MapWorld } from "./map-world";
 import { ManagerActor } from "./manager-actors";
+import { SystemStatic } from "./system-static";
 
 // handle spawning, updating, and rendering of trees
 export class SystemTrees {
   constructor() {}
 
   public static spawnSpeciesAt(
-    species: PlantSpecies,
+    species: Species,
     pos: Point,
     actorManager: ManagerActor
   ): ActorBase {
@@ -35,14 +36,14 @@ export class SystemTrees {
         species: species.id,
       };
       actorBase.sprite = Sprite.from(
-        PlantSpecies.getTextureFor(species, Layer.SMALLACTOR)
+        SystemStatic.getTextureFor(species, Layer.SMALLACTOR)
       );
       actorBase.sprite.anchor.set(0.5, 1);
       actorBase.sprite.position.x =
         pos.x * Tile.denseSize - Tile.denseSize - Tile.denseSize / 2;
-      actorBase.sprite.position.y = pos.y * Tile.denseSize - Tile.denseSize - 0;
+      actorBase.sprite.position.y = pos.y * Tile.denseSize - Tile.denseSize + 1;
 
-      if (species.id === PlantSpeciesEnum.PINE) {
+      if (species.id === "pine") {
         actorBase.fruitCount = 1;
       }
 
@@ -60,23 +61,23 @@ export class SystemTrees {
   }
 
   public static spawnSpeciesAtRand(
-    species: PlantSpecies,
+    species: Species,
     map: MapWorld,
     actorManager: ManagerActor
   ): ActorBase {
     let pos: Point;
     let biomes: BiomeId[];
     switch (species.id) {
-      case PlantSpeciesEnum.PINE:
+      case "pine":
         biomes = [Biomes.Biomes.moistdirt.id];
         break;
-      case PlantSpeciesEnum.BIRCH:
+      case "birch":
         biomes = [Biomes.Biomes.hillsmid.id, Biomes.Biomes.hillshigh.id];
         break;
-      case PlantSpeciesEnum.COTTONCANDY:
+      case "cottoncandy":
         biomes = [Biomes.Biomes.valley.id];
         break;
-      case PlantSpeciesEnum.MAPLE:
+      case "maple":
         biomes = [Biomes.Biomes.snowhillshillsmid.id];
         break;
       default:

@@ -8,7 +8,7 @@ import { WanderAction } from "../actions/wanderAction";
 import {
   ActorBase,
   CanFruit,
-  WithAnimator,
+  WithAnimation,
   WithID,
   WithLayer,
   WithPathing,
@@ -16,9 +16,9 @@ import {
 } from "../actor";
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
-import { Animator } from "../components/animator";
 import { Tile } from "../tile";
 import { Layer } from "../renderer";
+import { SystemAnimated } from "../system-animated";
 
 export class BrainCow implements Brain {
   action: Action | null;
@@ -30,7 +30,7 @@ export class BrainCow implements Brain {
       WithID &
       WithPosition &
       WithPathing &
-      WithAnimator &
+      WithAnimation &
       WithLayer
   ) {
     this.action = null;
@@ -141,7 +141,7 @@ export class BrainCow implements Brain {
       .run()
       .then((res: { movementVector: [number, number] }) => {
         // face the sprite/anim to the direction of movement
-        Animator.updateFacing(res?.movementVector, this.actor.animator);
+        SystemAnimated.updateFacing(this.actor, res?.movementVector);
 
         if (this.goal === this.action) {
           // goal completed, pick a new one next turn

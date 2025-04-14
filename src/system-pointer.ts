@@ -1,12 +1,10 @@
-import { ActorBase } from "./actor";
+import { ActorBase, isActor } from "./actor";
 import { Query } from "miniplex";
 import { Layer, Renderer } from "./renderer";
 import { Tile } from "./tile";
 import { Camera, Viewport } from "./camera";
-import { GameSettings } from "./game-settings";
-import { LightManager, RGBAColor } from "./light-manager";
-import { AnimatedSprite, Color, Sprite } from "pixi.js";
-import { generateId, indexToPosition } from "./misc-utility";
+import { Sprite } from "pixi.js";
+import { generateId } from "./misc-utility";
 import { Color as ColorType } from "rot-js/lib/color";
 import { ManagerActor } from "./manager-actors";
 import { Point } from "./point";
@@ -28,7 +26,7 @@ export class SystemPointer {
   public static spawnPointer(
     position: Point,
     actorManager: ManagerActor,
-    target: ActorBase | null = null
+    target: ActorBase | number | null = null
   ): void {
     SystemPointer.clearPointer(actorManager.withPointer, actorManager);
 
@@ -47,7 +45,7 @@ export class SystemPointer {
         sprite: sprite,
         isUi: true,
         isPointer: true,
-        pointerTarget: target,
+        pointerTarget: isActor(target) ? target : null,
       },
       false
     );
@@ -73,15 +71,6 @@ export class SystemPointer {
       if (Camera.inViewport(x, y, layer, viewport)) {
         renderer.renderDisplayObject(sprite as Sprite, layer);
       }
-    }
-  }
-
-  public static setAnimatorSpeed(
-    actors: Query<ActorBase>,
-    timeScale: number
-  ): void {
-    for (const { animator } of actors) {
-      animator.scaleAnimSpeed(timeScale);
     }
   }
 }

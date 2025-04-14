@@ -9,25 +9,23 @@ import { BrainFish } from "./brains/brain-fish";
 import { BrainAnimal } from "./brains/brain-animal";
 import { BrainCow } from "./brains/brain-cow";
 import { Tile } from "./tile";
-import {
-  PlantSpecies,
-  PlantSpeciesEnum,
-  PlantSpeciesId,
-} from "./plant-species";
+import { SpeciesId } from "./species";
 import { Query, World } from "miniplex";
 import {
   ComponentType,
   ActorBase,
   WithPosition,
   WithID,
-  WithAnimator,
+  WithAnimation,
   WithTile,
   isPointer,
+  isActor,
+  isAnimated,
 } from "./actor";
 import { ManagerShrubs } from "./manager-shrubs";
-import { Animator } from "./components/animator";
 import { Description } from "./components/description";
 import { AnimatedSprite, DisplayObject, Sprite } from "pixi.js";
+import { SystemAnimated } from "./system-animated";
 
 export class ManagerActor {
   private world: World<ActorBase>;
@@ -39,9 +37,9 @@ export class ManagerActor {
   public groundCover: Query<ActorBase>;
   public groundCoverGrowth: Query<ActorBase>;
   public allTrees: Query<ActorBase>;
-  public withPosition: Query<ActorBase & WithPosition>;
+  public withPosition: Query<ActorBase & WithID & WithPosition>;
   public withCollider: Query<ActorBase>;
-  public withAnimator: Query<ActorBase & WithID & WithPosition & WithAnimator>;
+  public withAnimator: Query<ActorBase & WithPosition & WithAnimation>;
   public withStaticSprite: Query<ActorBase & WithID & WithTile & WithPosition>;
   public withBrain: Query<ActorBase>;
   public withUI: Query<ActorBase>;
@@ -49,7 +47,10 @@ export class ManagerActor {
 
   constructor(private game: Game) {
     this.world = new World<ActorBase>();
-    this.withPosition = this.world.with(ComponentType.position);
+    this.withPosition = this.world
+      .with(ComponentType.id)
+      .with(ComponentType.position)
+      .with(ComponentType.layer);
     this.allPositioned = this.world.with(ComponentType.position);
     this.allPlants = this.world
       .with(ComponentType.layer)
@@ -68,24 +69,23 @@ export class ManagerActor {
     this.withCollider = this.world
       .with(ComponentType.position)
       .with(ComponentType.collider);
-    this.withAnimator = this.world
-      .with(ComponentType.id)
-      .with(ComponentType.position)
-      .with(ComponentType.animator)
-      .where((actor) => actor.animator !== undefined);
-    this.withStaticSprite = this.world
-      .with(ComponentType.id)
-      .with(ComponentType.position)
+    this.withAnimator = this.withPosition
+      .with(ComponentType.sprite)
+      .with(ComponentType.animId)
+      .with(ComponentType.animationMap)
+      .with(ComponentType.baseAnimSpeed)
+      .with(ComponentType.currentAnimation);
+
+    this.withStaticSprite = this.withPosition
       .with(ComponentType.tile)
-      .where((actor) => actor.animator == null);
+      .where((actor) => actor.animId == null);
+    // .where((actor) => actor.animator == null);
     this.withUI = this.world
       .with(ComponentType.id)
       .with(ComponentType.position)
       .with(ComponentType.sprite)
       .with(ComponentType.isUi);
-    this.withPointer = this.world
-      .with(ComponentType.id)
-      .with(ComponentType.position)
+    this.withPointer = this.withPosition
       .with(ComponentType.sprite)
       .with(ComponentType.isUi)
       .with(ComponentType.isPointer);
@@ -159,7 +159,7 @@ export class ManagerActor {
   }
 
   public getRandomTreePositions(
-    speciesId: PlantSpeciesId,
+    speciesId: SpeciesId,
     quantity: number = 1
   ): Point[] {
     let buffer: Point[] = [];
@@ -216,6 +216,9 @@ export class ManagerActor {
     addToSchedule: boolean = false
   ): ActorBase {
     if (!actor.position || !actor.id) return null;
+    if (isAnimated(actor)) {
+      SystemAnimated.setAnimation(actor, "idle");
+    }
     this.world.add(actor);
     if (addToSchedule) {
       this.game.timeManager.addToSchedule(actor, true);
@@ -228,6 +231,9 @@ export class ManagerActor {
         actor.id
       );
     }
+
+    // do last to ensure all components are added
+    this.world.add(actor);
     return actor;
   }
 

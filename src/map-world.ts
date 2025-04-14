@@ -74,7 +74,6 @@ export class MapWorld {
 
   public biomeAdjacencyD1Map: BiomeId[][]; // adjacency map with distance of 1 tile
   public biomeAdjacencyD2Map: BiomeId[][];
-  private dirtyTiles: number[];
   private landHeight: number;
   private valleyScaleFactor: number;
   private edgePadding: number;
@@ -102,7 +101,6 @@ export class MapWorld {
     this.terrainAdjacencyD2Map = [];
     this.biomeAdjacencyD1Map = [];
     this.biomeAdjacencyD2Map = [];
-    this.dirtyTiles = [];
     this.landHeight = 0.5;
     this.valleyScaleFactor = 2;
     this.edgePadding = 0;
@@ -164,7 +162,6 @@ export class MapWorld {
     this.biomeMap = new Map();
     this.heightMap = new Map();
     this.terrainMap = new Map();
-    this.dirtyTiles = [];
     let index = -1;
 
     // first pass, generate base height and assign terrain
@@ -296,13 +293,6 @@ export class MapWorld {
     } else {
       this.generateBasetileMap(this.biomeMap);
     }
-
-    for (let x = 0; x < width; x++) {
-      for (let y = 0; y < height; y++) {
-        index = positionToIndex(x, y, Layer.TERRAIN);
-        this.dirtyTiles.push(index); // all tiles need to be rendered
-      }
-    }
   }
 
   public getHeightLayer(x: number, y: number): HeightLayer {
@@ -314,16 +304,20 @@ export class MapWorld {
   }
 
   private generateBasetileMap(rawMap: Map<number, BiomeId>) {
+    let tileId: number;
     for (const [index, biomeId] of rawMap) {
-      const tile =
-        Tile.Tilesets[biomeId][this.game.timeManager.season][BaseTileKey];
+      tileId = Tile.generateTileId(
+        biomeId,
+        this.game.timeManager.season,
+        BaseTileKey
+      );
 
-      if (!tile) {
+      if (!tileId) {
         console.log(
           `BASETILE ERROR: ${biomeId} - ${this.game.timeManager.season}`
         );
       }
-      this.tileMap[index] = tile.id;
+      this.tileMap[index] = tileId;
     }
   }
 
@@ -911,7 +905,7 @@ export class MapWorld {
     let biome: Biome;
     let biomeId: BiomeId;
     let season: Season;
-    let tile: Tile;
+    let tileId: number;
     season = this.game.timeManager.season;
 
     for (const [index, autotileIndex] of this.autotileMap) {
@@ -919,24 +913,23 @@ export class MapWorld {
       biome = Biomes.Biomes[biomeId];
       if (!biome?.autotilePrefix) {
         // use the base tile rather than autotiling
-        tile = Tile.Tilesets[biomeId][season][BaseTileKey];
+        tileId = Tile.generateTileId(biomeId, season, BaseTileKey);
       } else {
-        tile = Tile.Tilesets[biomeId][season][autotileIndex];
+        tileId = Tile.generateTileId(biomeId, season, autotileIndex);
       }
 
-      if (!tile) {
+      if (!tileId) {
         console.log(
           `AUTOTILE ERROR: ${biomeId} - ${season} - ${autotileIndex}`
         );
       }
-      this.tileMap[index] = tile.id;
+      this.tileMap[index] = tileId;
     }
   }
 
-  setTile(x: number, y: number, tile: Tile): void {
+  setTile(x: number, y: number, tileId: number): void {
     const index = positionToIndex(x, y, Layer.TERRAIN);
-    this.tileMap[index] = tile.id;
-    this.dirtyTiles.push(index);
+    this.tileMap[index] = tileId;
   }
 
   getRandomTilePositions(
@@ -944,7 +937,7 @@ export class MapWorld {
     quantity: number = 1,
     unblockedOnly = true,
     isDenseLayer: boolean = false,
-    maxAttempts: number = 100
+    maxAttempts: number = 1000
   ): Point[] {
     let result: Point[] = [];
     let randPos: Point;
@@ -987,9 +980,9 @@ export class MapWorld {
     return shuffle(result);
   }
 
-  getTile(x: number, y: number): Tile {
+  getTile(x: number, y: number): number {
     const tileId = this.tileMap[positionToIndex(x, y, Layer.TERRAIN)];
-    return Tile.tiles[tileId];
+    return tileId;
   }
 
   getTileIdByPosition(x: number, y: number): number {
@@ -1060,19 +1053,6 @@ export class MapWorld {
       finalLight = 1;
     }
     return finalLight;
-  }
-
-  draw(): void {
-    // let tilePos: Point;
-    // let tileId: number;
-    // for (let tileIndex of this.dirtyTiles) {
-    //   tilePos = indexToPosition(tileIndex, Layer.TERRAIN);
-    //   tileId = this.tileMap[tileIndex];
-    //   this.game.renderer.removeFromScene(tileIndex, Layer.TERRAIN);
-    //   this.game.renderer.addTileIdToScene(tilePos, Layer.TERRAIN, tileId);
-    // }
-    // // Clear the changed tiles after drawing them
-    // this.dirtyTiles = [];
   }
 
   onTileEnterViewport(indexes: number[]): void {

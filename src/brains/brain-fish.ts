@@ -5,7 +5,7 @@ import { WaitAction } from "../actions/waitAction";
 import { WanderAction } from "../actions/wanderAction";
 import {
   ActorBase,
-  WithAnimator,
+  WithAnimation,
   WithID,
   WithPathing,
   WithPosition,
@@ -13,7 +13,7 @@ import {
 } from "../actor";
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
-import { Animator } from "../components/animator";
+import { SystemAnimated } from "../system-animated";
 
 export class BrainFish implements Brain {
   action: Action | null;
@@ -26,7 +26,7 @@ export class BrainFish implements Brain {
       WithTile &
       WithPosition &
       WithPathing &
-      WithAnimator
+      WithAnimation
   ) {
     this.action = null;
     this.goal = null;
@@ -111,7 +111,7 @@ export class BrainFish implements Brain {
       .run()
       .then((res: { movementVector: [number, number] }) => {
         // face the sprite/anim to the direction of movement
-        Animator.updateFacing(res?.movementVector, this.actor.animator);
+        SystemAnimated.updateFacing(this.actor, res?.movementVector);
 
         if (this.goal === this.action) {
           // goal completed, pick a new one next turn

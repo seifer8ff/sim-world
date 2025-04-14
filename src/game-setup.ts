@@ -3,25 +3,24 @@ import { BiomeId, Biomes } from "./biomes";
 import { BrainAnimal } from "./brains/brain-animal";
 import { BrainCow } from "./brains/brain-cow";
 import { BrainFish } from "./brains/brain-fish";
-import { Animator } from "./components/animator";
 import { Description } from "./components/description";
 import { ActorBase, WithID, WithPosition } from "./actor";
-import {
-  PlantSpecies,
-  PlantSpeciesEnum,
-  PlantSpeciesId,
-} from "./plant-species";
+import { Species, SpeciesId } from "./species";
 import { Game } from "./game";
 import { GameSettings } from "./game-settings";
 import { generateId } from "./misc-utility";
 import { Layer } from "./renderer";
-import { Tile } from "./tile";
 import { ManagerActor } from "./manager-actors";
 import { ManagerShrubs } from "./manager-shrubs";
 import { MapWorld } from "./map-world";
 import { UserInterface } from "./user-interface";
 import { GeneratorNames } from "./generator-names";
 import { SystemTrees } from "./system-trees";
+import {
+  cowAnimationMap,
+  defaultAnimationMap,
+  mushroomAnimationMap,
+} from "./components/animation-map";
 
 // add the initial flora/fauna to the game world
 export class GameSetup {
@@ -71,16 +70,16 @@ export class GameSetup {
       // add components representing cow
       actor = {
         id: generateId(),
+        species: "cow",
         layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.landBiomes, 1, true)[0],
-        spritePath: Tile.cow.spritePath,
-        animationPath: Tile.cow.animationPath,
-        animationMap: Tile.cow.animationMap,
+        animationMap: cowAnimationMap,
+        animId: "cow",
+        baseAnimSpeed: 0.3,
       };
       actor.name = this.nameGen.generate("animal");
       actor.range = 10;
       actor.path = [];
-      actor.animator = new Animator(this.game, actor as any, 0.3);
       actor.brain = new BrainCow(this.game, actor as any);
       actor.description = new Description(actor);
       this.actorManager.spawnActor(actor, addToSchedule);
@@ -89,17 +88,17 @@ export class GameSetup {
       // SHARK
       actor = {
         id: generateId(),
+        species: "sharkblue",
         layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.waterBiomes, 1, true)[0],
-        spritePath: Tile.sharkBlue.spritePath,
-        animationPath: Tile.sharkBlue.animationPath,
-        animationMap: Tile.sharkBlue.animationMap,
+        animationMap: defaultAnimationMap,
+        animId: "sharkblue",
+        baseAnimSpeed: 0.3,
       };
       actor.name = this.nameGen.generate("aquatic");
       actor.validBiomes = this.waterBiomes;
       actor.range = 15;
       actor.path = [];
-      actor.animator = new Animator(this.game, actor as any, 0.3);
       actor.brain = new BrainFish(this.game, actor as any);
       actor.description = new Description(actor);
       this.actorManager.spawnActor(actor, addToSchedule);
@@ -108,17 +107,17 @@ export class GameSetup {
       // SEAGULL
       actor = {
         id: generateId(),
+        species: "seagull",
         layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.airBiomes, 1, false)[0],
-        spritePath: Tile.seagull.spritePath,
-        animationPath: Tile.seagull.animationPath,
-        animationMap: Tile.seagull.animationMap,
+        animationMap: defaultAnimationMap,
+        animId: "seagull",
+        baseAnimSpeed: 0.3,
       };
       actor.name = this.nameGen.generate("aquatic");
       actor.validBiomes = this.airBiomes;
       actor.range = 25;
       actor.path = [];
-      actor.animator = new Animator(this.game, actor as any, 0.3);
       actor.brain = new BrainAnimal(this.game, actor as any);
       actor.description = new Description(actor);
       this.actorManager.spawnActor(actor, addToSchedule);
@@ -127,16 +126,16 @@ export class GameSetup {
       // MUSHROOM
       actor = {
         id: generateId(),
+        species: "mushroom",
         layer: Layer.ACTOR,
         position: this.map.getRandomTilePositions(this.landBiomes, 1, true)[0],
-        spritePath: Tile.mushroom.spritePath,
-        animationPath: Tile.mushroom.animationPath,
-        animationMap: Tile.mushroom.animationMap,
+        animationMap: mushroomAnimationMap,
+        animId: "mushroom",
+        baseAnimSpeed: 2.25,
       };
       actor.name = this.nameGen.generate("animal");
       actor.path = [];
       actor.range = 15;
-      actor.animator = new Animator(this.game, actor as any, 2.25);
       actor.brain = new BrainAnimal(this.game, actor as any);
       actor.description = new Description(actor);
       this.actorManager.spawnActor(actor, addToSchedule);
@@ -151,21 +150,17 @@ export class GameSetup {
   private spawnInitialPlants(): void {
     const quarter = Math.floor(GameSettings.options.spawn.inputs.treeCount / 4);
     for (let i = 0; i < GameSettings.options.spawn.inputs.treeCount; i++) {
-      let type: PlantSpeciesId;
+      let type: SpeciesId;
       type =
-        RNG.getUniform() < 0.5 ? PlantSpeciesEnum.PINE : PlantSpeciesEnum.BIRCH;
-      // type =
-      //   i < quarter
-      //     ? TreeSpeciesEnum.PINE
-      //     : i < quarter * 2
-      //     ? TreeSpeciesEnum.BIRCH
-      //     : i < quarter * 3
-      //     ? TreeSpeciesEnum.COTTONCANDY
-      //     : TreeSpeciesEnum.MAPLE;
-      // this.spawnTree(Tree, TreeSpecies.treeSpecies[type]);
-      // this.spawnTree(TreeSpecies.treeSpecies[type]);
+        i < quarter
+          ? "pine"
+          : i < quarter * 2
+          ? "birch"
+          : i < quarter * 3
+          ? "cottoncandy"
+          : "maple";
       SystemTrees.spawnSpeciesAtRand(
-        PlantSpecies.plantSpecies[type],
+        Species.allSpecies[type],
         this.game.map,
         this.actorManager
       );

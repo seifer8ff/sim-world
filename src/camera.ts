@@ -30,7 +30,7 @@ export interface Viewport {
 
 export interface PointerTarget {
   position: Point;
-  target: Tile | ActorBase;
+  target: number | ActorBase;
   info?: TileStats;
 }
 
@@ -166,7 +166,7 @@ export class Camera {
 
   public setPointerTarget(
     pos: Point,
-    target: Tile | ActorBase,
+    target: number | ActorBase,
     viewportTarget = false
   ) {
     if (this.game.gameState.stage !== Stages.Play) {
@@ -219,7 +219,7 @@ export class Camera {
     // check if entity at tile position
     // check if plant at tile pos
     // if so, select it
-    let tile: Tile;
+    let tileId: number;
     let actors: ActorBase[];
     let actor: ActorBase;
 
@@ -231,8 +231,8 @@ export class Camera {
     }
 
     // otherwise, select terrain tile at point
-    tile = this.map.getTile(x, y);
-    this.setPointerTarget(new Point(x, y), tile, viewportTarget);
+    tileId = this.map.getTile(x, y);
+    this.setPointerTarget(new Point(x, y), tileId, viewportTarget);
 
     return this.pointerTarget;
   }

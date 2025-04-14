@@ -195,7 +195,7 @@ export class Game {
       const viewportUnpadded = this.userInterface.camera.viewportUnpadded;
 
       // update cache for entities and plants
-      SystemAnimated.setAnimatorSpeed(
+      SystemAnimated.setAnimationSpeed(
         this.actorManager.withAnimator,
         this.timeManager.timeScale
       );
@@ -206,8 +206,6 @@ export class Game {
     if (GameSettings.options.toggles.enableStats) {
       this.settings.stats?.begin();
     }
-
-    this.map.draw();
 
     this.userInterface.camera.renderUpdate(interpPercent);
 

@@ -1,5 +1,5 @@
 import { ComponentType, ActorBase, WithPosition, WithID } from "./actor";
-import { PlantSpecies, PlantSpeciesEnum } from "./plant-species";
+import { Species } from "./species";
 import { Game } from "./game";
 import { BiomeId, Biomes } from "./biomes";
 import { Point } from "./point";
@@ -75,7 +75,7 @@ export class ManagerShrubs {
       if (isComplete) {
         // spawn tree in place of actively growing shrub
         SystemTrees.spawnSpeciesAt(
-          PlantSpecies.plantSpecies[PlantSpeciesEnum.PINE],
+          Species.allSpecies["pine"],
           shrub.position,
           this.game.actorManager
         );

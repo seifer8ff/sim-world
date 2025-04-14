@@ -3,7 +3,7 @@ import * as PIXI from "pixi.js";
 import { Tile, BaseTileKey } from "./tile";
 import { Season } from "./time-manager";
 import { Biome, BiomeId, Biomes } from "./biomes";
-import { PlantSpecies } from "./plant-species";
+import { Species } from "./species";
 
 export interface CachedTexture {
   url: string;
@@ -98,15 +98,13 @@ export async function InitAssetsStage1() {
   // Assets.backgroundLoadBundle(allBundles);
 
   await Assets.backgroundLoadBundle(allBundles);
-  processManualTiles();
   ProcessTilesetsIntoTiles();
-  // PlantSpecies.processSpecies();
 }
 
 /** generate assets that require render (i.e. custom textures using renderTextures) */
 
 export async function InitAssetsStage2(app: PIXI.Application) {
-  PlantSpecies.processSpecies(app);
+  Species.processSpecies(app);
 }
 
 export function initPixiOptions(): void {
@@ -114,17 +112,6 @@ export function initPixiOptions(): void {
   PIXI.BaseTexture.defaultOptions.anisotropicLevel = 0;
   PIXI.BaseTexture.defaultOptions.mipmap = PIXI.MIPMAP_MODES.ON;
   PIXI.BaseTexture.defaultOptions.wrapMode = PIXI.WRAP_MODES.CLAMP;
-}
-
-export function processManualTiles() {
-  // for each manually defined tile, add it to the Tile object
-  // this is for tiles that don't have a tileset
-  const manualTiles = [Tile.mushroom, Tile.cow, Tile.seagull, Tile.sharkBlue];
-  manualTiles.forEach((tile) => {
-    // generate a texture for the tile if it doesn't exist yet
-    Tile.tiles[tile.id] = tile;
-    Tile.textures[tile.id] = PIXI.Texture.from(tile.spritePath); // Store the texture for each tile
-  });
 }
 
 export function ProcessTilesetsIntoTiles() {
@@ -135,37 +122,15 @@ export function ProcessTilesetsIntoTiles() {
   console.log("Final processed Tilesets: ", Tile.Tilesets);
 }
 
-export function generateTileset(tilesetMeta: Biome) {
-  console.log(tilesetMeta);
-  let tilesetUrl;
-  const autoTilePrefix = tilesetMeta.autotilePrefix;
+export function generateTileset(biomeDef: Biome) {
+  const autoTilePrefix = biomeDef.autotilePrefix;
   if (autoTilePrefix) {
     for (let j = 0; j < 48; j++) {
-      tilesetUrl = `${autoTilePrefix}${tileFormat.format(j)}`;
-      addTileToTileset(
-        tilesetMeta,
-        j,
-        new Tile(
-          tilesetUrl,
-          tilesetMeta.color,
-          undefined,
-          undefined,
-          tilesetMeta.id
-        )
-      );
+      const tilesetUrl = `${autoTilePrefix}${tileFormat.format(j)}`;
+      addTileToTileset(tilesetUrl, biomeDef, j, Tile.currentId++);
     }
   }
-  addTileToTileset(
-    tilesetMeta,
-    BaseTileKey,
-    new Tile(
-      tilesetMeta.baseTile,
-      tilesetMeta.color,
-      undefined,
-      undefined,
-      tilesetMeta.id
-    )
-  );
+  addTileToTileset(biomeDef.baseTile, biomeDef, BaseTileKey, Tile.currentId++);
 }
 
 export function getCachedTileTexture(sprite: string): CachedTexture {
@@ -180,10 +145,22 @@ export function getCachedTileTexture(sprite: string): CachedTexture {
   return null;
 }
 
+export function getTextureURL(texture: PIXI.Texture): CachedTexture {
+  if (texture) {
+    return {
+      url: texture.baseTexture.resource.src,
+      xOffset: texture.frame.x,
+      yOffset: texture.frame.y,
+    };
+  }
+  return null;
+}
+
 function addTileToTileset(
+  spritePath: string,
   tilesetMeta: Biome,
   tileIndex: number | string,
-  tile: Tile
+  tileId: number
 ) {
   // add entry for tileset if it doesn't already exist.
   // it could exist already if other seasons have been added
@@ -197,25 +174,7 @@ function addTileToTileset(
       Tile.Tilesets[tilesetMeta.id][season] = {};
     }
     // add the generated tile to the tileset object
-    Tile.Tilesets[tilesetMeta.id][season][tileIndex] = tile;
+    Tile.Tilesets[tilesetMeta.id][season][tileIndex] = tileId;
   }
-  Tile.tiles[tile.id] = tile;
-  Tile.textures[tile.id] = PIXI.Texture.from(tile.spritePath);
+  Tile.textures[tileId] = PIXI.Texture.from(spritePath);
 }
-
-// function addBaseTileToTileset(tilesetMeta: Biome, tile: Tile) {
-//   // add entry for tileset if it doesn't already exist.
-//   // it could exist already if other seasons have been added
-//   if (!Tile.Tilesets[tilesetMeta.id]) {
-//     Tile.Tilesets[tilesetMeta.id] = {};
-//   }
-
-//   for (const season of AssetSeasons) {
-//     if (!Tile.Tilesets[tilesetMeta.id][season]) {
-//       // add entry for season if it doesn't already exist
-//       Tile.Tilesets[tilesetMeta.id][season] = {};
-//     }
-//     // add the generated tile to the tileset object
-//     Tile.Tilesets[tilesetMeta.id][season]["base"] = tile;
-//   }
-// }
