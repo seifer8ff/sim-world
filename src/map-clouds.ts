@@ -2,6 +2,7 @@ import { Game } from "./game";
 import { lerp } from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { GameSettings } from "./game-settings";
+import { SystemTime } from "./system-time";
 
 export enum MessageType {
   INIT,
@@ -99,9 +100,9 @@ export class MapClouds {
     this.worker.postMessage({
       type: MessageType.INTERPOLATE_STRENGTH,
       data: {
-        lightTransitionPercent: this.game.timeManager.lightTransitionPercent,
-        remainingCyclePercent: this.game.timeManager.remainingCyclePercent,
-        lightPhase: this.game.timeManager.lightPhase,
+        lightTransitionPercent: SystemTime.lightTransitionPercent,
+        remainingCyclePercent: SystemTime.remainingCyclePercent,
+        lightPhase: SystemTime.lightPhase,
       },
     });
     this.interpolateCloudState(
@@ -119,7 +120,7 @@ export class MapClouds {
     for (let i = 0; i < tileIndexes.length; i++) {
       posIndex = tileIndexes[i];
       val = lerp(
-        this.game.timeManager.turnAnimTimePercent,
+        SystemTime.turnAnimTimePercent,
         this.get(posIndex),
         this.targetCloudMap[posIndex]
       );

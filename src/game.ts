@@ -3,7 +3,7 @@ import { GameState, Stages } from "./game-state";
 import { UserInterface } from "./user-interface";
 import { Layer, Renderer } from "./renderer";
 import { MapWorld } from "./map-world";
-import { TimeManager } from "./time-manager";
+import { SystemTime } from "./system-time";
 import { GeneratorNames } from "./generator-names";
 import Simplex from "rot-js/lib/noise/simplex";
 import Noise from "rot-js/lib/noise/noise";
@@ -31,7 +31,6 @@ export class Game {
   public animManager: ManagerAnimation;
   public actorManager: SystemActors;
   public pathfinder: SystemPathfinder;
-  public timeManager: TimeManager;
   public userInterface: UserInterface;
   public nameGenerator: GeneratorNames;
   private turnAnimDelayCounter: number = 0; // how long to delay the game loop for (like when animations are playing)
@@ -45,7 +44,7 @@ export class Game {
     console.log("Game seed:", GameSettings.options.gameSeed);
     this.noise = new Simplex();
 
-    this.timeManager = new TimeManager(this);
+    SystemTime.init();
     this.animManager = new ManagerAnimation(this);
     this.gameState = new GameState();
     this.map = new MapWorld(this);
@@ -66,7 +65,7 @@ export class Game {
 
   public start() {
     window.addEventListener("blur", () => {
-      this.timeManager.setIsPaused(true);
+      SystemTime.setIsPaused(true);
     });
     MainLoop.setBegin(this.startLoop.bind(this))
       .setUpdate(this.mainLoop.bind(this))
@@ -123,28 +122,28 @@ export class Game {
       this.uiLoop(deltaTime);
 
       // handle counting down wait time after a turn (like for animation)
-      if (this.turnAnimDelayCounter > 0 && !this.timeManager.isPaused) {
-        this.turnAnimDelayCounter -= deltaTime * this.timeManager.timeScale;
+      if (this.turnAnimDelayCounter > 0 && !SystemTime.isPaused) {
+        this.turnAnimDelayCounter -= deltaTime * SystemTime.timeScale;
       }
       if (this.turnAnimDelayCounter < 0) {
         this.turnAnimDelayCounter = 0;
       }
 
-      if (!this.timeManager.isPaused && this.turnAnimDelayCounter <= 0) {
+      if (!SystemTime.isPaused && this.turnAnimDelayCounter <= 0) {
         this.gameLoop();
         this.turnAnimDelayCounter = GameSettings.options.turnAnimDelay;
-        this.timeManager.resetTurnAnimTime();
+        SystemTime.resetTurnAnimTime();
       }
     }
   }
 
   public gameLoop() {
-    const turn = TimeManager.currentTurn;
+    const turn = SystemTime.currentTurn;
     let actors: ActorBase[] = [];
 
     // loop through ALL actors each turn
-    while (turn === TimeManager.currentTurn) {
-      actors.push(this.timeManager.nextOnSchedule());
+    while (turn === SystemTime.currentTurn) {
+      actors.push(SystemTime.nextOnSchedule());
     }
     return Promise.all(
       actors.map((actor) => {
@@ -155,7 +154,7 @@ export class Game {
     ).then(async () => {
       actors.forEach((actor) => {
         if (actor?.brain?.action) {
-          this.timeManager.setDuration(actor?.brain.action.durationInTurns);
+          SystemTime.setDuration(actor?.brain.action.durationInTurns);
         }
       });
 
@@ -191,7 +190,7 @@ export class Game {
 
       SystemAnimated.setAnimationSpeed(
         SystemActors.queries.withAnimator,
-        this.timeManager.timeScale
+        SystemTime.timeScale
       );
     });
   }
@@ -207,7 +206,7 @@ export class Game {
     const lightManager = this.map.lightManager;
 
     if (this.gameState.stage === Stages.Play) {
-      this.timeManager.renderUpdate(this.turnAnimDelayCounter);
+      SystemTime.renderUpdate(this.turnAnimDelayCounter);
 
       if (GameSettings.options.toggles.enableShadows) {
         this.map.shadowMap.renderUpdate(interpPercent);

@@ -9,7 +9,7 @@ import {
 } from "./misc-utility";
 import { Point } from "./point";
 import { ActorBase } from "./actor";
-import { TimeManager } from "./time-manager";
+import { SystemTime } from "./system-time";
 
 export interface Animation {
   id: number;
@@ -45,7 +45,7 @@ export class ManagerAnimation {
   public animUpdate() {
     for (let i = this.animations.length - 1; i >= 0; i--) {
       const anim = this.animations[i];
-      if (anim.endTurn <= TimeManager.currentTurn) {
+      if (anim.endTurn <= SystemTime.currentTurn) {
         if (anim.callback) {
           anim.callback();
         }
@@ -80,7 +80,7 @@ export class ManagerAnimation {
       newPos: newPos,
       action: "move",
       turnDuration: 1,
-      endTurn: TimeManager.currentTurn + 1,
+      endTurn: SystemTime.currentTurn + 1,
       callback: callback,
     };
     if (actor) {
@@ -93,7 +93,7 @@ export class ManagerAnimation {
     const newPos = animation.newPos;
     const oldPos = animation.oldPos;
     if (oldPos && newPos) {
-      let percent = this.game.timeManager.turnAnimTimePercent;
+      let percent = SystemTime.turnAnimTimePercent;
       let animDone = percent >= 0.99; // reduce for snappier feel
       if (animDone) percent = 1;
 

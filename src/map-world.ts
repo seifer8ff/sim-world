@@ -15,7 +15,7 @@ import {
 } from "./misc-utility";
 import { MapTemperature } from "./map-temperature";
 import { MapMoisture } from "./map-moisture";
-import { Season } from "./time-manager";
+import { Season, SystemTime } from "./system-time";
 import { Biome, BiomeId, Biomes, ImpassibleBorder } from "./biomes";
 import { Color as ColorType } from "rot-js/lib/color";
 import { MapShadows } from "./map-shadows";
@@ -307,16 +307,10 @@ export class MapWorld {
   private generateBasetileMap(rawMap: Map<number, BiomeId>) {
     let tileId: number;
     for (const [index, biomeId] of rawMap) {
-      tileId = Tile.generateTileId(
-        biomeId,
-        this.game.timeManager.season,
-        BaseTileKey
-      );
+      tileId = Tile.generateTileId(biomeId, SystemTime.season, BaseTileKey);
 
       if (!tileId) {
-        console.log(
-          `BASETILE ERROR: ${biomeId} - ${this.game.timeManager.season}`
-        );
+        console.log(`BASETILE ERROR: ${biomeId} - ${SystemTime.season}`);
       }
       this.tileMap[index] = tileId;
     }
@@ -907,7 +901,7 @@ export class MapWorld {
     let biomeId: BiomeId;
     let season: Season;
     let tileId: number;
-    season = this.game.timeManager.season;
+    season = SystemTime.season;
 
     for (const [index, autotileIndex] of this.autotileMap) {
       biomeId = rawMap.get(index);
@@ -1180,7 +1174,7 @@ export class MapWorld {
     // console.throttle(250).log("lightFromClouds", lightFromClouds, cloudLevel);
     let ambientLight = 1;
     if (GameSettings.options.toggles.enableGlobalLights) {
-      ambientLight = this.game.timeManager.remainingPhasePercent;
+      ambientLight = SystemTime.remainingPhasePercent;
     }
     let finalLight =
       lightFromShadows * ambientLight * lightFromOcc * lightFromClouds;

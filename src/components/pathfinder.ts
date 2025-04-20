@@ -1,10 +1,10 @@
-import { WithID, WithPosition } from "../entities/actor";
 import { Point } from "../point";
 import { Game } from "../game";
 import { Biome, BiomeId, Biomes } from "../biomes";
 import { Layer } from "../renderer";
 import { Path, RNG } from "rot-js";
 import { SystemCollision } from "../system-collision";
+import { WithID, WithPosition } from "../actor";
 
 export class Pathfinder {
   private target: Point;

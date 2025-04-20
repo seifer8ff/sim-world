@@ -6,12 +6,7 @@ import { Point } from "./point";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
 import { Camera } from "./camera";
-
-export enum LightPhase {
-  "rising" = 0,
-  "peak" = 1,
-  "setting" = 2,
-}
+import { DayPhase, SystemTime } from "./system-time";
 
 export enum SunLevels {
   Bright = "Bright",
@@ -88,7 +83,7 @@ export class MapShadows {
   public sunupDropoffMap: Map<number, Map<number, number>>;
   public topdownDropoffMap: Map<number, Map<number, number>>;
   private oldShadowLength: number;
-  private oldPhase: LightPhase;
+  private oldPhase: DayPhase;
 
   constructor(private game: Game, private map: MapWorld) {
     this.shadowMap = [];
@@ -102,7 +97,7 @@ export class MapShadows {
     this.ambientLightStrength = 0.8;
     this.shadowLength = GameSettings.options.maxShadowLength;
     this.oldShadowLength = this.shadowLength;
-    this.oldPhase = this.game.timeManager.lightPhase;
+    this.oldPhase = SystemTime.lightPhase;
     this.sunupOffsetMap = [];
     this.sundownOffsetMap = [];
     this.sundownDropoffMap = new Map();
@@ -260,9 +255,9 @@ export class MapShadows {
   }
 
   private updateShadowDirection() {
-    if (this.oldPhase !== this.game.timeManager.lightPhase) {
+    if (this.oldPhase !== SystemTime.lightPhase) {
       // switch direction of shadows on phase changes
-      this.oldPhase = this.game.timeManager.lightPhase;
+      this.oldPhase = SystemTime.lightPhase;
       this.updateShadowMap(true, this.getShadowDir());
     }
   }
@@ -276,22 +271,22 @@ export class MapShadows {
   }
 
   private getShadowDir(): SunDirection {
-    return this.game.timeManager.lightPhase === LightPhase.rising ||
-      this.game.timeManager.lightPhase === LightPhase.peak
+    return SystemTime.lightPhase === DayPhase.morning ||
+      SystemTime.lightPhase === DayPhase.mid
       ? SunDirection.Sunup
       : SunDirection.Sundown;
   }
 
   private interpolateStrength() {
     // shadows change length and strength by time to light transition rather than deltaTime
-    const lightTransitionPercent = this.game.timeManager.lightTransitionPercent;
-    const remainingCyclePercent = this.game.timeManager.remainingCyclePercent;
-    const phase = this.game.timeManager.lightPhase;
+    const lightTransitionPercent = SystemTime.lightTransitionPercent;
+    const remainingCyclePercent = SystemTime.remainingCyclePercent;
+    const phase = SystemTime.lightPhase;
 
     let remainingLightTransitionPercent;
     let shadowStrength = this.shadowStrength;
     let ambientShadowStrength = this.ambientOcclusionShadowStrength;
-    if (phase === LightPhase.rising) {
+    if (phase === DayPhase.morning) {
       remainingLightTransitionPercent =
         (1 - remainingCyclePercent) / lightTransitionPercent;
       this.shadowLength = Math.round(
@@ -303,7 +298,7 @@ export class MapShadows {
       );
       shadowStrength = lerp(remainingLightTransitionPercent, 0, 0.8);
       ambientShadowStrength = lerp(remainingLightTransitionPercent, 1, 0.3);
-    } else if (phase === LightPhase.setting) {
+    } else if (phase === DayPhase.evening) {
       remainingLightTransitionPercent =
         remainingCyclePercent / lightTransitionPercent;
       this.shadowLength = Math.round(
@@ -324,7 +319,7 @@ export class MapShadows {
   public interpolateShadowState(tileIndexes: number[]) {
     // smoothly transition between shadowMap and targetShadowMap over time
     let val: number;
-    const progress = this.game.timeManager.turnAnimTimePercent;
+    const progress = SystemTime.turnAnimTimePercent;
     let index: number;
     for (let i = 0; i < tileIndexes.length; i++) {
       index = tileIndexes[i];

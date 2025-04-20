@@ -35,7 +35,7 @@ export class Player {
     //   const animKeys = Object.keys(animations).sort();
     //   this.sprite = AnimatedSprite.fromFrames(animKeys);
     //   (this.sprite as AnimatedSprite).animationSpeed =
-    //     GameSettings.options.animationSpeed * this.game.timeManager.timeScale;
+    //     GameSettings.options.animationSpeed * TimeManager.timeScale;
     //   (this.sprite as AnimatedSprite).loop = true;
     //   (this.sprite as AnimatedSprite).play();
     // } else {

@@ -2,7 +2,7 @@ import { Texture } from "pixi.js";
 import { BiomeId } from "./biomes";
 import { Point } from "./point";
 import { Layer } from "./renderer";
-import { Season } from "./time-manager";
+import { Season } from "./system-time";
 
 // tile name/index for non-autotile tiles. The base sprite is used for all variations
 export const BaseTileKey = -999;

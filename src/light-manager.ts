@@ -6,7 +6,6 @@ import { Color as ColorType } from "rot-js/lib/color";
 import { Tile } from "./tile";
 import { multiColorLerp, positionToIndex } from "./misc-utility";
 import { BiomeId } from "./biomes";
-import { LightPhase } from "./map-shadows";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
 import { Query } from "miniplex";
@@ -14,6 +13,7 @@ import { ActorBase } from "./actor";
 import { Camera } from "./camera";
 import { SystemActors } from "./system-actors";
 import { SystemCollision } from "./system-collision";
+import { DayPhase, SystemTime } from "./system-time";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -130,19 +130,19 @@ export class LightManager {
     }
     // Set the target light state instead of the current light state
     let ambientLightToUpdate = this.targetAmbientLight;
-    const isDaytime = this.game.timeManager.isDayTime;
-    const phase = this.game.timeManager.lightPhase;
+    const isDaytime = SystemTime.isDayTime;
+    const phase = SystemTime.lightPhase;
     if (!calculateTarget) {
       ambientLightToUpdate = this.ambientLight;
     }
     if (isDaytime) {
-      if (phase === LightPhase.rising) {
+      if (phase === DayPhase.morning) {
         ambientLightToUpdate = Color.lerp(
           LightManager.lightDefaults.ambientDaylight,
           LightManager.lightDefaults.sunlight,
-          this.game.timeManager.remainingPhasePercent
+          SystemTime.remainingPhasePercent
         );
-      } else if (phase === LightPhase.peak) {
+      } else if (phase === DayPhase.mid) {
         ambientLightToUpdate = LightManager.lightDefaults.sunlight;
       } else {
         ambientLightToUpdate = multiColorLerp(
@@ -151,20 +151,20 @@ export class LightManager {
             LightManager.lightDefaults.ambientSunset,
             LightManager.lightDefaults.sunlight,
           ],
-          this.game.timeManager.remainingPhasePercent
+          SystemTime.remainingPhasePercent
         );
       }
     } else {
-      if (phase === LightPhase.rising) {
+      if (phase === DayPhase.morning) {
         ambientLightToUpdate = multiColorLerp(
           [
             LightManager.lightDefaults.ambientDaylight,
             LightManager.lightDefaults.ambientNightLight,
             LightManager.lightDefaults.moonlight,
           ],
-          this.game.timeManager.remainingPhasePercent
+          SystemTime.remainingPhasePercent
         );
-      } else if (phase === LightPhase.peak) {
+      } else if (phase === DayPhase.mid) {
         ambientLightToUpdate = LightManager.lightDefaults.moonlight;
       } else {
         ambientLightToUpdate = multiColorLerp(
@@ -173,7 +173,7 @@ export class LightManager {
             LightManager.lightDefaults.ambientNightLight,
             LightManager.lightDefaults.moonlight,
           ],
-          this.game.timeManager.remainingPhasePercent
+          SystemTime.remainingPhasePercent
         );
       }
     }
@@ -251,7 +251,7 @@ export class LightManager {
     if (!GameSettings.options.toggles.enableGlobalLights) {
       return;
     }
-    const progress = this.game.timeManager.turnAnimTimePercent;
+    const progress = SystemTime.turnAnimTimePercent;
     // Interpolate between the current light state and the target light state based on
     // the progress from start to this.game.options.maxTurnDelay
     this.ambientLight = Color.lerp(
@@ -344,7 +344,7 @@ export class LightManager {
     if (!GameSettings.options.toggles.enableDynamicLights) {
       return;
     }
-    if (this.game.timeManager.isNighttime) {
+    if (SystemTime.isNighttime) {
       for (const actor of SystemActors.queries.withAnimator) {
         let updateLight = false;
         if (!this.lightEmitterById[actor.id]) {
@@ -498,13 +498,13 @@ export class LightManager {
     cloudMap: number = null,
     highlight: boolean = false
   ): ColorType {
-    const { timeManager, map } = this.game;
+    const { map } = this.game;
     const { shadowMap: globalShadowMap, cloudMap: globalCloudMap } = map;
     const ambientLight = this.ambientLight;
-    const isDaytime = timeManager.isDayTime;
-    const phase = timeManager.lightPhase;
-    const isNight = timeManager.isNighttime;
-    const isSettingPhase = phase === LightPhase.setting;
+    const isDaytime = SystemTime.isDayTime;
+    const phase = SystemTime.lightPhase;
+    const isNight = SystemTime.isNighttime;
+    const isSettingPhase = phase === DayPhase.evening;
 
     const shadow = isSettingPhase
       ? LightManager.lightDefaults.shadowSunset
@@ -538,7 +538,7 @@ export class LightManager {
       cloudShadow = Color.interpolate(
         cloudShadow,
         ambientLight,
-        1 - timeManager.remainingPhasePercent
+        1 - SystemTime.remainingPhasePercent
       );
     }
 
@@ -604,9 +604,9 @@ export class LightManager {
   //   highlight: boolean = false
   // ): ColorType {
   //   const ambientLight = this.ambientLight;
-  //   const isDaytime = this.game.timeManager.isDayTime;
-  //   const phase = this.game.timeManager.lightPhase;
-  //   const isNight = this.game.timeManager.isNighttime;
+  //   const isDaytime = TimeManager.isDayTime;
+  //   const phase = TimeManager.lightPhase;
+  //   const isNight = TimeManager.isNighttime;
   //   const isSettingPhase = phase === LightPhase.setting;
   //   let shadow = isSettingPhase
   //     ? LightManager.lightDefaults.shadowSunset
@@ -635,14 +635,14 @@ export class LightManager {
   //   //     : LightManager.lightDefaults.cloudShadow,
   //   //   ambientLight
   //   // );
-  //   // console.log(this.game.timeManager.remainingCyclePercent);
+  //   // console.log(TimeManager.remainingCyclePercent);
   //   if (!isNight && isSettingPhase) {
-  //     // console.log(this.game.timeManager.remainingCyclePercent);
+  //     // console.log(TimeManager.remainingCyclePercent);
 
   //     cloudShadow = Color.interpolate(
   //       cloudShadow,
   //       ambientLight,
-  //       1 - this.game.timeManager.remainingPhasePercent
+  //       1 - TimeManager.remainingPhasePercent
   //     );
   //   }
 

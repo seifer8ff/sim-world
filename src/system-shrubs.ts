@@ -17,7 +17,7 @@ import { MapWorld } from "./map-world";
 import { SystemActors } from "./system-actors";
 import { BiomeId, Biomes } from "./biomes";
 import { Tile } from "./tile";
-import { TimeManager } from "./time-manager";
+import { SystemTime } from "./system-time";
 import { SystemCollision } from "./system-collision";
 
 export class SystemShrubs {
@@ -97,8 +97,8 @@ export class SystemShrubs {
           speciesType: "shrub",
           position: pos,
           species: species.id,
-          firstGrowth: TimeManager.currentTurn,
-          lastGrowth: TimeManager.currentTurn, // indicates actor will grow
+          firstGrowth: SystemTime.currentTurn,
+          lastGrowth: SystemTime.currentTurn, // indicates actor will grow
         };
 
       SystemShrubs.spacialMap.set(
@@ -129,7 +129,7 @@ export class SystemShrubs {
   ): void {
     for (const shrub of shrubs) {
       if (
-        TimeManager.currentTurn - shrub.lastGrowth >
+        SystemTime.currentTurn - shrub.lastGrowth >
         RNG.getUniformInt(10, 30)
       ) {
         SystemShrubs.growShrub(shrub, actorManager, map);
@@ -143,7 +143,7 @@ export class SystemShrubs {
   ): void {
     for (const shrub of shrubs) {
       if (
-        TimeManager.currentTurn - shrub.firstGrowth >
+        SystemTime.currentTurn - shrub.firstGrowth >
         RNG.getUniformInt(50, 150)
       ) {
         this.remove(shrub, actorManager); // despawn the shrub
@@ -156,7 +156,7 @@ export class SystemShrubs {
     actorManager: SystemActors,
     map: MapWorld
   ): boolean {
-    shrub.lastGrowth = TimeManager.currentTurn;
+    shrub.lastGrowth = SystemTime.currentTurn;
     SystemActors.world.reindex(shrub);
     let growSuccess = false;
     if (!shrub?.position) return growSuccess;

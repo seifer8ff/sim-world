@@ -1,7 +1,7 @@
 import { Assets, AssetsManifest } from "pixi.js";
 import * as PIXI from "pixi.js";
 import { Tile, BaseTileKey } from "./tile";
-import { Season } from "./time-manager";
+import { Season } from "./system-time";
 import { Biome, BiomeId, Biomes } from "./biomes";
 import { Species } from "./species";
 

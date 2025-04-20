@@ -23,6 +23,7 @@ import { GameSettings } from "./game-settings";
 import { serialize } from "@shoelace-style/shoelace";
 import { ActorBase } from "./actor";
 import { SystemStatic } from "./system-static";
+import { SystemTime } from "./system-time";
 
 export class ManagerWebComponents {
   private timeControl: TimeControl;
@@ -144,15 +145,13 @@ export class ManagerWebComponents {
     this.timeControl = document.querySelector("time-control");
     if (this.timeControl) {
       // this.timeControl.toggleTooltip();
-      this.timeControl.updateTime(
-        this.game.timeManager.getCurrentTimeForDisplay()
-      );
+      this.timeControl.updateTime(SystemTime.getCurrentTimeForDisplay());
       this.timeControl.pauseBtn.addEventListener("click", () => {
-        this.game.timeManager.togglePause();
+        SystemTime.togglePause();
       });
       this.timeControl.timeSlider.addEventListener("sl-input", (e: any) => {
-        this.game.timeManager.setTimescale(e.target.value);
-        console.log("time scale: ", this.game.timeManager.timeScale);
+        SystemTime.setTimescale(e.target.value);
+        console.log("time scale: ", SystemTime.timeScale);
       });
     }
 
@@ -199,10 +198,8 @@ export class ManagerWebComponents {
 
   public updateTimeControl(): void {
     if (this.timeControl) {
-      this.timeControl.updateTime(
-        this.game.timeManager.getCurrentTimeForDisplay()
-      );
-      this.timeControl.updatePauseBtn(this.game.timeManager.isPaused);
+      this.timeControl.updateTime(SystemTime.getCurrentTimeForDisplay());
+      this.timeControl.updatePauseBtn(SystemTime.isPaused);
     }
   }
 
@@ -270,7 +267,7 @@ export class ManagerWebComponents {
       clickHandler: () => {
         const tile = Tile.getTileId(
           option.id as BiomeId,
-          this.game.timeManager.season,
+          SystemTime.season,
           BaseTileKey
         );
 
@@ -293,7 +290,7 @@ export class ManagerWebComponents {
         handler: () => {
           console.log("overlays selected");
           this.setUIVisible(false, true);
-          // this.game.timeManager.setIsPaused(true);
+          // TimeManager.setIsPaused(true);
           this.overlay.setVisible(true);
         },
       },

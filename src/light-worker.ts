@@ -1,6 +1,6 @@
 import { Color as ColorType } from "rot-js/lib/color";
 import { Color } from "rot-js";
-import { LightPhase } from "./map-shadows";
+import { DayPhase } from "./system-time";
 
 console.log("spawned light worker");
 
@@ -47,7 +47,7 @@ onmessage = (e) => {
     options: {
       ambientLight: ColorType;
       isDaytime: boolean;
-      lightPhase: LightPhase;
+      lightPhase: DayPhase;
       ambientLightStrength: number;
       minCloudLevel: number;
       maxSunbeamLevel: number;
@@ -96,7 +96,7 @@ const calculateLightForPositions = (
   options: {
     ambientLight: ColorType;
     isDaytime: boolean;
-    lightPhase: LightPhase;
+    lightPhase: DayPhase;
     ambientLightStrength: number;
     minCloudLevel: number;
     maxSunbeamLevel: number;
@@ -138,7 +138,7 @@ const calculateLight = (
   options: {
     ambientLight: ColorType;
     isDaytime: boolean;
-    lightPhase: LightPhase;
+    lightPhase: DayPhase;
     ambientLightStrength: number;
     minCloudLevel: number;
     maxSunbeamLevel: number;
@@ -161,7 +161,7 @@ const calculateLight = (
   highlight: boolean = false
 ): ColorType => {
   const isNight = !options.isDaytime;
-  const isSettingPhase = options.lightPhase === LightPhase.setting;
+  const isSettingPhase = options.lightPhase === DayPhase.evening;
   let shadow = isSettingPhase
     ? options.lightDefaults.shadowSunset
     : options.lightDefaults.shadowSunrise;

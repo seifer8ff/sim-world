@@ -22,6 +22,7 @@ import {
   mushroomAnimationMap,
 } from "./components/animation-map";
 import { Point } from "./point";
+import { SystemTime } from "./system-time";
 
 // add the initial flora/fauna to the game world
 export class GameSetup {
@@ -53,7 +54,7 @@ export class GameSetup {
   init(): void {
     this.spawnInitialPlants();
     this.spawnInitialAnimals();
-    this.game.timeManager.setIsPaused(false);
+    SystemTime.setIsPaused(false);
     for (let i = 0; i < 20; i++) {
       this.game.gameLoop();
     }

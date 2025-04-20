@@ -5,6 +5,7 @@ import * as PIXI from "pixi.js";
 import { Camera } from "./camera";
 import { ManagerWebComponents } from "./manager-web-components";
 import { BiomeId } from "./biomes";
+import { SystemTime } from "./system-time";
 
 export class UserInterface {
   public application: PIXI.Application<PIXI.ICanvas>;
@@ -58,7 +59,7 @@ export class UserInterface {
 
   private handleInput(event: KeyboardEvent): void {
     if (event.keyCode === KEYS.VK_SPACE) {
-      this.game.timeManager.togglePause();
+      SystemTime.togglePause();
     }
   }
 

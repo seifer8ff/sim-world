@@ -2,11 +2,11 @@ import { getScaledNoise, indexToXY, lerp } from "./misc-utility";
 import { Point } from "./point";
 import { BiomeId, Biomes } from "./biomes";
 import Noise from "rot-js/lib/noise/noise";
-import { LightPhase } from "./map-shadows";
 import { RNG } from "rot-js";
 import { Layer } from "./renderer";
 import Simplex from "rot-js/lib/noise/simplex";
 import { MessageType } from "./map-clouds";
+import { DayPhase } from "./system-time";
 
 console.log("spawned map-clouds-worker");
 
@@ -56,21 +56,21 @@ const init = (data: {
 const interpolateStrength = (data: {
   lightTransitionPercent: number;
   remainingCyclePercent: number;
-  lightPhase: LightPhase;
+  lightPhase: DayPhase;
 }) => {
   let remainingLightTransitionPercent;
 
-  if (data.lightPhase === LightPhase.rising) {
+  if (data.lightPhase === DayPhase.morning) {
     remainingLightTransitionPercent =
       (1 - data.remainingCyclePercent) / data.lightTransitionPercent;
     cloudStrength = lerp(remainingLightTransitionPercent, 1, 0.95);
     sunbeamStrength = lerp(remainingLightTransitionPercent, sunbeamMaxLevel, 1); // prevent sunbeams from flickering
-  } else if (data.lightPhase === LightPhase.peak) {
+  } else if (data.lightPhase === DayPhase.mid) {
     // smoothly fade between 0 and 1 repeatedly, in a wave
     // const wave = Math.sin(remainingCyclePercent * Math.PI);
     // cloudStrength = lerp(wave, 0.95, 1);
     // sunbeamStrength = lerp(wave, 1, this.sunbeamMaxLevel);
-  } else if (data.lightPhase === LightPhase.setting) {
+  } else if (data.lightPhase === DayPhase.evening) {
     remainingLightTransitionPercent =
       data.remainingCyclePercent / data.lightTransitionPercent;
     cloudStrength = lerp(remainingLightTransitionPercent, 1, 0.95);
