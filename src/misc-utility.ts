@@ -252,3 +252,13 @@ export function indexToXY(
   const y = Math.floor(index / denseWidthInTiles);
   return [x, y];
 }
+
+export function calculateMidpointScore(
+  value: number,
+  min: number,
+  max: number
+): number {
+  const mid = (min + max) / 2;
+  const range = (max - min) / 2;
+  return Math.max(0, 1 - Math.abs(value - mid) / range);
+}

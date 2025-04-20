@@ -6,7 +6,7 @@ import { Camera, Viewport } from "./camera";
 import { Sprite } from "pixi.js";
 import { generateId } from "./misc-utility";
 import { Color as ColorType } from "rot-js/lib/color";
-import { ManagerActor } from "./manager-actors";
+import { SystemActors } from "./system-actors";
 import { Point } from "./point";
 
 // handle rendering pointer sprite
@@ -25,10 +25,10 @@ export class SystemPointer {
 
   public static spawnPointer(
     position: Point,
-    actorManager: ManagerActor,
+    actorManager: SystemActors,
     target: ActorBase | number | null = null
   ): void {
-    SystemPointer.clearPointer(actorManager.withPointer, actorManager);
+    SystemPointer.clearPointer(SystemActors.queries.withPointer, actorManager);
 
     const sprite = Sprite.from("ui_tile_select");
     sprite.anchor.set(0.5);
@@ -37,7 +37,7 @@ export class SystemPointer {
     sprite.position.y = position.y * Tile.size;
 
     // Create a new pointer actor with the specified position
-    actorManager.spawnActor(
+    actorManager.spawn(
       {
         id: generateId(),
         position: position,
@@ -53,10 +53,10 @@ export class SystemPointer {
 
   public static clearPointer(
     actors: Query<ActorBase>,
-    actorManager: ManagerActor
+    actorManager: SystemActors
   ): void {
     for (const actor of actors) {
-      actorManager.removeActor(actor);
+      actorManager.remove(actor);
     }
   }
 

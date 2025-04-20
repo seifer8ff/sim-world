@@ -12,6 +12,7 @@ import { Layer } from "./renderer";
 import { Query } from "miniplex";
 import { ActorBase } from "./actor";
 import { Camera } from "./camera";
+import { SystemActors } from "./system-actors";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -314,7 +315,7 @@ export class LightManager {
   }
 
   public clearAllDynamicLights() {
-    for (const actor of this.game.actorManager.withAnimator) {
+    for (const actor of SystemActors.queries.withAnimator) {
       if (this.lightEmitterById[actor.id]) {
         const [x, y] = this.lightEmitterById[actor.id];
         this.lightEmitters.setLight(x, y, null);
@@ -327,7 +328,7 @@ export class LightManager {
     if (!GameSettings.options.toggles.enableDynamicLights) {
       return;
     }
-    for (const actor of this.game.actorManager.withAnimator) {
+    for (const actor of SystemActors.queries.withAnimator) {
       if (this.lightEmitterById[actor.id]) {
         const [x, y] = this.lightEmitterById[actor.id];
         if (actor.position.x != x || actor.position.y != y) {
@@ -343,7 +344,7 @@ export class LightManager {
       return;
     }
     if (this.game.timeManager.isNighttime) {
-      for (const actor of this.game.actorManager.withAnimator) {
+      for (const actor of SystemActors.queries.withAnimator) {
         let updateLight = false;
         if (!this.lightEmitterById[actor.id]) {
           updateLight = true;

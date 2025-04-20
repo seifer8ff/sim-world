@@ -1,7 +1,7 @@
 import { Point } from "./point";
 import { Tile } from "./tile";
 import { Layer } from "./renderer";
-import { SpeciesId } from "./species";
+import { SpeciesId, SpeciesType } from "./species";
 import { AnimatedSprite, Sprite } from "pixi.js";
 import { Brain } from "./brains/brain";
 import { Description } from "./components/description";
@@ -63,12 +63,13 @@ export interface WithAnimation extends WithSprite {
 }
 
 export interface WithGrowth {
-  canGrow?: boolean; // whether the actor can grow or not
-  growthStep?: number;
+  lastGrowth: number; // last turn number the actor grew
+  firstGrowth: number;
 }
 
 export interface WithSpecies {
-  species?: SpeciesId;
+  species: SpeciesId;
+  speciesType: SpeciesType; // type of species, e.g. "creature", "tree", "shrub", etc.
 }
 
 export interface isUi {
@@ -106,8 +107,8 @@ export enum ComponentType {
   tile = "tile",
   layer = "layer",
   species = "species",
-  canGrow = "canGrow",
-  growthStep = "growthStep",
+  lastGrowth = "lastGrowth",
+  firstGrowth = "firstGrowth",
   sprite = "sprite",
   brain = "brain",
   path = "path",
@@ -121,6 +122,7 @@ export enum ComponentType {
   animationMap = "animationMap",
   baseAnimSpeed = "baseAnimSpeed",
   currentAnimation = "currentAnimation",
+  speciesType = "speciesType",
 }
 
 export function isActor(object: any): object is ActorBase {

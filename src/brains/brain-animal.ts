@@ -17,6 +17,7 @@ import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
 import { Tile } from "../tile";
 import { SystemAnimated } from "../system-animated";
+import { SystemActors } from "../system-actors";
 
 export class BrainAnimal implements Brain {
   action: Action | null;
@@ -36,7 +37,7 @@ export class BrainAnimal implements Brain {
 
   private planGoal(): Action {
     for (let i = 0; i < 25; i++) {
-      const plantTargets: ActorBase[] = this.game.actorManager.getNearestActors(
+      const plantTargets: ActorBase[] = SystemActors.getNearest(
         this.actor.position,
         ["fruitCount"],
         50 // count to return

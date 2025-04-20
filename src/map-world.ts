@@ -937,71 +937,185 @@ export class MapWorld {
     quantity: number = 1,
     unblockedOnly = true,
     isDenseLayer: boolean = false,
-    maxAttempts: number = 1000
+    maxAttempts: number = 5000
   ): Point[] {
     let result: Point[] = [];
     let randPos: Point;
-    let translatedPos: Point;
     const desiredBiomesSet = new Set(biomeTypes);
     let attempts = 0;
 
     // loop until we have enough results, or we've tried too many times
     while (result.length < quantity && attempts < maxAttempts) {
-      // get a random point
+      // get a random dense tile point
       randPos = new Point(
-        Math.floor(Math.random() * GameSettings.options.gameSize.width),
-        Math.floor(Math.random() * GameSettings.options.gameSize.height)
+        Math.floor(
+          Math.random() *
+            GameSettings.options.gameSize.width *
+            Tile.tileDensityRatio
+        ),
+        Math.floor(
+          Math.random() *
+            GameSettings.options.gameSize.height *
+            Tile.tileDensityRatio
+        )
+      );
+
+      // used for biome checks
+      const nonDensePos = Tile.translatePoint(
+        randPos,
+        Layer.SMALLACTOR,
+        Layer.TERRAIN
       );
 
       // check if the position is valid
-      // repeat if the position isn't valid
-      if (desiredBiomesSet.has(this.getBiome(randPos.x, randPos.y).id)) {
-        if (isDenseLayer) {
-          // convert everything to a dense tile position
-          translatedPos = Tile.translatePoint(
-            randPos,
-            Layer.TERRAIN,
+      if (
+        desiredBiomesSet.has(this.getBiome(nonDensePos.x, nonDensePos.y)?.id)
+      ) {
+        if (
+          unblockedOnly &&
+          !this.game.collisionManager.isBlocked(
+            randPos.x,
+            randPos.y,
             Layer.SMALLACTOR
-          );
-          //check each dense tile position
-          for (let x = 0; x < Tile.tileDensityRatio; x++) {
-            for (let y = 0; y < Tile.tileDensityRatio; y++) {
-              // check collision
-              if (
-                unblockedOnly &&
-                !this.game.collisionManager.isBlocked(
-                  translatedPos.x,
-                  translatedPos.y,
-                  Layer.SMALLACTOR
-                )
-              ) {
-                result.push(
-                  new Point(translatedPos.x + x, translatedPos.y + y)
-                );
-                // no need to check for collision
-              } else if (!unblockedOnly) {
-                result.push(
-                  new Point(translatedPos.x + x, translatedPos.y + y)
-                );
-              }
-            }
-          }
-        } else {
-          // non-dense layer, just add the position if valid
-          if (
-            unblockedOnly &&
-            !this.game.collisionManager.isBlocked(randPos.x, randPos.y)
-          ) {
-            result.push(randPos);
-          } else if (!unblockedOnly) {
-            result.push(randPos);
-          }
+          )
+        ) {
+          result.push(isDenseLayer ? randPos : nonDensePos);
+        } else if (!unblockedOnly) {
+          result.push(isDenseLayer ? randPos : nonDensePos);
         }
       }
       attempts++;
     }
-    return shuffle(result);
+    return RNG.shuffle(result).slice(0, quantity);
   }
+
+  // getRandomTilePositions(
+  //   biomeTypes: BiomeId[],
+  //   quantity: number = 1,
+  //   unblockedOnly = true,
+  //   isDenseLayer: boolean = false,
+  //   maxAttempts: number = 10000
+  // ): Point[] {
+  //   let result: Point[] = [];
+  //   let randPos: Point;
+  //   const desiredBiomesSet = new Set(biomeTypes);
+  //   let attempts = 0;
+
+  //   // loop until we have enough results, or we've tried too many times
+  //   while (result.length < quantity && attempts < maxAttempts) {
+  //     // get a random dense tile point
+  //     randPos = new Point(
+  //       Math.floor(
+  //         Math.random() *
+  //           GameSettings.options.gameSize.width *
+  //           Tile.tileDensityRatio
+  //       ),
+  //       Math.floor(
+  //         Math.random() *
+  //           GameSettings.options.gameSize.height *
+  //           Tile.tileDensityRatio
+  //       )
+  //     );
+
+  //     // used for biome checks
+  //     const nonDensePos = Tile.translatePoint(
+  //       randPos,
+  //       Layer.SMALLACTOR,
+  //       Layer.TERRAIN
+  //     );
+
+  //     // check if the position is valid
+  //     if (
+  //       desiredBiomesSet.has(this.getBiome(nonDensePos.x, nonDensePos.y)?.id)
+  //     ) {
+  //       if (
+  //         unblockedOnly &&
+  //         !this.game.collisionManager.isBlocked(
+  //           randPos.x,
+  //           randPos.y,
+  //           Layer.SMALLACTOR
+  //         )
+  //       ) {
+  //         result.push(isDenseLayer ? randPos : nonDensePos);
+  //       } else if (!unblockedOnly) {
+  //         result.push(isDenseLayer ? randPos : nonDensePos);
+  //       }
+  //     }
+  //     attempts++;
+  //   }
+  //   return RNG.shuffle(result).slice(0, quantity);
+  // }
+
+  // getRandomTilePositions(
+  //   biomeTypes: BiomeId[],
+  //   quantity: number = 1,
+  //   unblockedOnly = true,
+  //   isDenseLayer: boolean = false,
+  //   maxAttempts: number = 1000
+  // ): Point[] {
+  //   let result: Point[] = [];
+  //   let randPos: Point;
+  //   let translatedPos: Point;
+  //   const desiredBiomesSet = new Set(biomeTypes);
+  //   let attempts = 0;
+
+  //   // loop until we have enough results, or we've tried too many times
+  //   while (result.length < quantity && attempts < maxAttempts) {
+  //     // get a random point
+  //     randPos = new Point(
+  //       Math.floor(Math.random() * GameSettings.options.gameSize.width),
+  //       Math.floor(Math.random() * GameSettings.options.gameSize.height)
+  //     );
+
+  //     // check if the position is valid
+  //     // repeat if the position isn't valid
+  //     if (desiredBiomesSet.has(this.getBiome(randPos.x, randPos.y).id)) {
+  //       if (isDenseLayer) {
+  //         // convert everything to a dense tile position
+  //         translatedPos = Tile.translatePoint(
+  //           randPos,
+  //           Layer.TERRAIN,
+  //           Layer.SMALLACTOR
+  //         );
+  //         //check each dense tile position
+  //         for (let x = 0; x < Tile.tileDensityRatio; x++) {
+  //           for (let y = 0; y < Tile.tileDensityRatio; y++) {
+  //             // check collision
+  //             if (
+  //               unblockedOnly &&
+  //               !this.game.collisionManager.isBlocked(
+  //                 translatedPos.x,
+  //                 translatedPos.y,
+  //                 Layer.SMALLACTOR
+  //               )
+  //             ) {
+  //               result.push(
+  //                 new Point(translatedPos.x + x, translatedPos.y + y)
+  //               );
+  //               // no need to check for collision
+  //             } else if (!unblockedOnly) {
+  //               result.push(
+  //                 new Point(translatedPos.x + x, translatedPos.y + y)
+  //               );
+  //             }
+  //           }
+  //         }
+  //       } else {
+  //         // non-dense layer, just add the position if valid
+  //         if (
+  //           unblockedOnly &&
+  //           !this.game.collisionManager.isBlocked(randPos.x, randPos.y)
+  //         ) {
+  //           result.push(randPos);
+  //         } else if (!unblockedOnly) {
+  //           result.push(randPos);
+  //         }
+  //       }
+  //     }
+  //     attempts++;
+  //   }
+  //   return RNG.shuffle(result).slice(0, quantity);
+  // }
 
   getTile(x: number, y: number): number {
     const tileId = this.tileMap[positionToIndex(x, y, Layer.TERRAIN)];

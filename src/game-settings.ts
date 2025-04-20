@@ -15,11 +15,12 @@ export class GameSettings {
       enableAnimations: true,
       enableStats: true,
       dayStart: true,
+      debugViewport: false,
     },
     spawn: {
       inputs: {
-        treeCount: 70,
-        shrubCount: 350,
+        treeCount: 700,
+        shrubCount: 900,
         mushroomCount: 10,
         cowCount: 20,
         seagullCount: 13,
@@ -47,6 +48,7 @@ export class GameSettings {
     ambientLightStrength: 0.8,
     minShadowLength: 0,
     maxShadowLength: 5,
+    viewportPadding: 15, // how many tiles to pad the viewport on each side
   };
   static worldSizeOptions = [
     {

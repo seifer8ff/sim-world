@@ -9,6 +9,7 @@ import {
 } from "./misc-utility";
 import { Point } from "./point";
 import { ActorBase } from "./actor";
+import { TimeManager } from "./time-manager";
 
 export interface Animation {
   id: number;
@@ -44,7 +45,7 @@ export class ManagerAnimation {
   public animUpdate() {
     for (let i = this.animations.length - 1; i >= 0; i--) {
       const anim = this.animations[i];
-      if (anim.endTurn <= this.game.timeManager.currentTurn) {
+      if (anim.endTurn <= TimeManager.currentTurn) {
         if (anim.callback) {
           anim.callback();
         }
@@ -79,7 +80,7 @@ export class ManagerAnimation {
       newPos: newPos,
       action: "move",
       turnDuration: 1,
-      endTurn: this.game.timeManager.currentTurn + 1,
+      endTurn: TimeManager.currentTurn + 1,
       callback: callback,
     };
     if (actor) {

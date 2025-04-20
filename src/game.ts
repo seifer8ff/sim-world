@@ -11,7 +11,7 @@ import { ManagerAnimation } from "./manager-animation";
 import MainLoop from "mainloop.js";
 import { InitAssetsStage1, InitAssetsStage2 } from "./assets";
 import { GameSettings } from "./game-settings";
-import { ManagerActor } from "./manager-actors";
+import { SystemActors } from "./system-actors";
 import { SystemTrees } from "./system-trees";
 import { ManagerCollision } from "./manager-collision";
 import { ActorBase } from "./actor";
@@ -20,6 +20,7 @@ import { SystemStatic } from "./system-static";
 import { SystemPathfinder } from "./system-pathfinder";
 import { GameSetup } from "./game-setup";
 import { SystemPointer } from "./system-pointer";
+import { SystemShrubs } from "./system-shrubs";
 
 export class Game {
   public settings: GameSettings;
@@ -28,7 +29,7 @@ export class Game {
   public gameState: GameState;
   public renderer: Renderer;
   public animManager: ManagerAnimation;
-  public actorManager: ManagerActor;
+  public actorManager: SystemActors;
   public collisionManager: ManagerCollision;
   public pathfinder: SystemPathfinder;
   public timeManager: TimeManager;
@@ -52,7 +53,7 @@ export class Game {
     this.nameGenerator = new GeneratorNames(this);
     this.userInterface = new UserInterface(this);
     this.renderer = new Renderer(this);
-    this.actorManager = new ManagerActor(this);
+    this.actorManager = new SystemActors(this);
   }
 
   public async Init(): Promise<boolean> {
@@ -139,11 +140,11 @@ export class Game {
   }
 
   public gameLoop() {
-    const turn = this.timeManager.currentTurn;
+    const turn = TimeManager.currentTurn;
     let actors: ActorBase[] = [];
 
     // loop through ALL actors each turn
-    while (turn === this.timeManager.currentTurn) {
+    while (turn === TimeManager.currentTurn) {
       actors.push(this.timeManager.nextOnSchedule());
     }
     return Promise.all(
@@ -155,7 +156,6 @@ export class Game {
     ).then(async () => {
       actors.forEach((actor) => {
         if (actor?.brain?.action) {
-          // console.log(`actor ${actor.name} is ${actor.action.name}`);
           this.timeManager.setDuration(actor?.brain.action.durationInTurns);
         }
       });
@@ -168,20 +168,18 @@ export class Game {
         })
       );
 
-      // grow some of the shrubs
-      let maxGrowth = 55;
-      for (const shrub of this.actorManager.groundCoverGrowth) {
-        if (maxGrowth <= 0) {
-          break;
-        }
-        if (Math.random() < 0.7) {
-          //  chance to skip
-          continue;
-        }
-        if (this.actorManager.shrubManager.growShrub(shrub)) {
-          maxGrowth--;
-        }
-      }
+      // actor-related updates
+      SystemShrubs.updateSpacialMap(SystemActors.queries.groundCoverGrowth);
+      SystemShrubs.updateGrowth(
+        SystemActors.queries.groundCoverGrowth,
+        this.actorManager,
+        this.map,
+        this.collisionManager
+      );
+      SystemShrubs.handleDeath(
+        SystemActors.queries.groundCoverGrowth,
+        this.actorManager
+      );
 
       this.map.lightManager.turnUpdate();
       this.map.shadowMap.turnUpdate();
@@ -193,11 +191,8 @@ export class Game {
       this.map.lightManager.updateDynamicLighting();
       this.map.lightManager.recalculateDynamicLighting();
 
-      const viewportUnpadded = this.userInterface.camera.viewportUnpadded;
-
-      // update cache for entities and plants
       SystemAnimated.setAnimationSpeed(
-        this.actorManager.withAnimator,
+        SystemActors.queries.withAnimator,
         this.timeManager.timeScale
       );
     });
@@ -233,9 +228,9 @@ export class Game {
       }
     }
 
-    SystemPointer.updatePointerPosition(this.actorManager.withPointer);
+    SystemPointer.updatePointerPosition(SystemActors.queries.withPointer);
     SystemPointer.renderPointer(
-      this.actorManager.withPointer,
+      SystemActors.queries.withPointer,
       this.renderer,
       viewport
     );
@@ -255,27 +250,31 @@ export class Game {
         lightManager,
         this.map
       );
-      SystemStatic.renderUI(this.actorManager.withUI, this.renderer, viewport);
+      SystemStatic.renderUI(
+        SystemActors.queries.withUI,
+        this.renderer,
+        viewport
+      );
       // at lower zoom levels, skip rendering the dense layers to improve performance
       if (
         viewport.tiles.length < GameSettings.options.hideDenseLayersTileCount
       ) {
         SystemStatic.renderGroundCover(
-          this.actorManager.groundCover,
+          SystemActors.queries.groundCover,
           this.renderer,
           lightManager,
           viewport
         );
 
         SystemTrees.renderTrees(
-          this.actorManager.allTrees,
+          SystemActors.queries.allTrees,
           this.renderer,
           lightManager,
           viewport
         );
 
         SystemAnimated.renderAnimated(
-          this.actorManager.withAnimator,
+          SystemActors.queries.withAnimator,
           this.renderer,
           this.map.lightManager,
           viewport

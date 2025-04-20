@@ -1,33 +1,52 @@
 import { ActorBase, WithID, WithPosition } from "./actor";
 import { Species } from "./species";
-import { generateId, inverseLerp } from "./misc-utility";
-import { Color } from "rot-js";
+import { generateId } from "./misc-utility";
+import { RNG } from "rot-js";
 import { Sprite } from "pixi.js";
 import { Point } from "./point";
 import { Layer, Renderer } from "./renderer";
 import { Tile } from "./tile";
 import { Color as ColorType } from "rot-js/lib/color";
 import { clamp } from "lodash";
-import { LightManager, RGBAColor } from "./light-manager";
+import { LightManager } from "./light-manager";
 import { Query } from "miniplex";
 import { Camera, Viewport } from "./camera";
-import { BiomeId, Biomes } from "./biomes";
 import { MapWorld } from "./map-world";
-import { ManagerActor } from "./manager-actors";
+import { SystemActors } from "./system-actors";
 import { SystemStatic } from "./system-static";
 
 // handle spawning, updating, and rendering of trees
 export class SystemTrees {
   constructor() {}
 
+  // spawns an appropriate species of tree at the given position
+  public static spawnAt(
+    pos: Point,
+    actorManager: SystemActors,
+    map: MapWorld
+  ): ActorBase {
+    // check the needs of the species against the position
+    let species: Species[] = Species.getSpeciesForPosition(
+      pos,
+      Layer.SMALLACTOR,
+      "tree",
+      map
+    );
+    if (species.length) {
+      const selectedSpecies = RNG.getItem(species);
+      return SystemTrees.spawnSpeciesAt(selectedSpecies, pos, actorManager);
+    }
+  }
+
   public static spawnSpeciesAt(
     species: Species,
     pos: Point,
-    actorManager: ManagerActor
+    actorManager: SystemActors
   ): ActorBase {
     if (pos) {
       let actorBase: ActorBase & WithPosition & WithID = {
         id: generateId(),
+        speciesType: "tree",
         layer: Layer.SMALLACTOR,
         name: "Tree",
         position: pos,
@@ -54,38 +73,10 @@ export class SystemTrees {
         position: pos,
         species: species.id,
       };
-      actorManager.spawnActor(trunkActorBase, false);
-      return actorManager.spawnActor(actorBase, false);
+      actorManager.spawn(trunkActorBase, false);
+      return actorManager.spawn(actorBase, false);
     }
     return null;
-  }
-
-  public static spawnSpeciesAtRand(
-    species: Species,
-    map: MapWorld,
-    actorManager: ManagerActor
-  ): ActorBase {
-    let pos: Point;
-    let biomes: BiomeId[];
-    switch (species.id) {
-      case "pine":
-        biomes = [Biomes.Biomes.moistdirt.id];
-        break;
-      case "birch":
-        biomes = [Biomes.Biomes.hillsmid.id, Biomes.Biomes.hillshigh.id];
-        break;
-      case "cottoncandy":
-        biomes = [Biomes.Biomes.valley.id];
-        break;
-      case "maple":
-        biomes = [Biomes.Biomes.snowhillshillsmid.id];
-        break;
-      default:
-        biomes = [Biomes.Biomes.moistdirt.id];
-        break;
-    }
-    pos = map.getRandomTilePositions(biomes, 1, true, true)[0];
-    return SystemTrees.spawnSpeciesAt(species, pos, actorManager);
   }
 
   public static renderTrees(
@@ -109,18 +100,6 @@ export class SystemTrees {
         renderer.renderDisplayObject(sprite, layer, tint as ColorType);
       }
     }
-  }
-
-  public static adjustTint(tint: ColorType, yPos: number): RGBAColor {
-    let darkenAmount = inverseLerp(yPos, -45, 5);
-    darkenAmount = clamp(darkenAmount, 0, 0.16);
-    let newTint = Color.interpolate(
-      tint,
-      LightManager.lightDefaults.shadow,
-      darkenAmount
-    );
-    newTint.push(1);
-    return newTint as any as RGBAColor;
   }
 
   public static grow(tree: ActorBase): boolean {

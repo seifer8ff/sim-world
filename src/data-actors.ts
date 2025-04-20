@@ -3,7 +3,7 @@ import {
   defaultAnimationMap,
   mushroomAnimationMap,
 } from "./components/animation-map";
-import { SpeciesDef } from "./species";
+import { SpeciesDef, SpeciesType } from "./species";
 import { Layer } from "./renderer";
 
 // couldn't we have an animated plant?
@@ -17,25 +17,31 @@ export enum IconLayer {
 const dataActors: SpeciesDef[] = [
   {
     id: "pine",
+    type: "tree",
     name: "Pine",
-    baseTint: "#475d39",
     color: "#475d39",
+    palette: {
+      base: "#ac7c14",
+      secondary: "#6d5117",
+      accent1: "#3ec31b",
+      accent2: "#31881a",
+    },
     spriteSet: {
-      [Layer.GROUNDCOVER]: ["tree_base"],
-      [Layer.SMALLACTOR]: ["tree_top"],
+      [Layer.GROUNDCOVER]: ["tree_base_recolor_2"],
+      [Layer.SMALLACTOR]: ["tree_top_recolor_2"],
     },
     needs: {
       temperature: {
-        min: 0,
-        max: 100,
+        min: 10,
+        max: 70,
       },
       moisture: {
-        min: 0,
+        min: 40,
         max: 100,
       },
       height: {
         min: 0,
-        max: 100,
+        max: 70,
       },
       light: {
         min: 0,
@@ -45,24 +51,30 @@ const dataActors: SpeciesDef[] = [
   },
   {
     id: "birch",
+    type: "tree",
     name: "Birch",
-    baseTint: "#d1aa80",
     color: "#d1aa80",
+    palette: {
+      base: "#e0dcd3", // trunk (white birch bark)
+      secondary: "#bab7af", // shadowed trunk (birch bark lines)
+      accent1: "#a7d57c", // foliage highlight (light soft green)
+      accent2: "#6ca248", // foliage (muted forest green)
+    },
     spriteSet: {
-      [Layer.GROUNDCOVER]: ["tree_base"],
-      [Layer.SMALLACTOR]: ["tree_top"],
+      [Layer.GROUNDCOVER]: ["tree_base_recolor_2"],
+      [Layer.SMALLACTOR]: ["tree_top_recolor_2"],
     },
     needs: {
       temperature: {
-        min: 0,
+        min: 40,
         max: 100,
       },
       moisture: {
-        min: 0,
+        min: 20,
         max: 100,
       },
       height: {
-        min: 0,
+        min: 70,
         max: 100,
       },
       light: {
@@ -73,24 +85,30 @@ const dataActors: SpeciesDef[] = [
   },
   {
     id: "maple",
+    type: "tree",
     name: "Maple",
-    baseTint: "#b65300",
     color: "#b65300",
+    palette: {
+      base: "#995d43", // trunk (reddish brown)
+      secondary: "#804e38", // shadowed trunk (deep brown)
+      accent1: "#d19526", // foliage (gold-orange)
+      accent2: "#d15f26", // foliage highlight (fiery red)
+    },
     spriteSet: {
-      [Layer.GROUNDCOVER]: ["tree_base"],
-      [Layer.SMALLACTOR]: ["tree_top"],
+      [Layer.GROUNDCOVER]: ["tree_base_recolor_2"],
+      [Layer.SMALLACTOR]: ["tree_top_recolor_2"],
     },
     needs: {
       temperature: {
         min: 0,
-        max: 100,
+        max: 50,
       },
       moisture: {
-        min: 0,
+        min: 40,
         max: 100,
       },
       height: {
-        min: 0,
+        min: 65,
         max: 100,
       },
       light: {
@@ -101,24 +119,30 @@ const dataActors: SpeciesDef[] = [
   },
   {
     id: "cottoncandy",
+    type: "tree",
     name: "Cotton Candy",
-    baseTint: "#ffa7a7",
     color: "#ffa7a7",
+    palette: {
+      base: "#f7e8ff", // trunk (soft white with a lilac tint)
+      secondary: "#b8a7c9", // shadowed trunk (cool lavender-gray)
+      accent1: "#f0b1d6", // foliage highlight (cotton pink)
+      accent2: "#c7a6e5", // foliage (soft lilac purple)
+    },
     spriteSet: {
-      [Layer.GROUNDCOVER]: ["tree_base"],
-      [Layer.SMALLACTOR]: ["tree_top"],
+      [Layer.GROUNDCOVER]: ["tree_base_recolor_2"],
+      [Layer.SMALLACTOR]: ["tree_top_recolor_2"],
     },
     needs: {
       temperature: {
         min: 0,
-        max: 100,
+        max: 38,
       },
       moisture: {
-        min: 0,
+        min: 30,
         max: 100,
       },
       height: {
-        min: 0,
+        min: 65,
         max: 100,
       },
       light: {
@@ -129,10 +153,17 @@ const dataActors: SpeciesDef[] = [
   },
   {
     id: "shrub",
+    type: "shrub",
     name: "Shrub",
     color: "#95C577",
+    palette: {
+      base: "#8de570", // light green outer
+      secondary: "#3d943f", // dark green inner
+      accent1: "#5ab25c", // mid green highlight
+      accent2: "#7ac661", // accent
+    },
     spriteSet: {
-      [Layer.GROUNDCOVER]: ["plant-8x8"],
+      [Layer.GROUNDCOVER]: ["shrub"],
     },
     needs: {
       temperature: {
@@ -140,11 +171,45 @@ const dataActors: SpeciesDef[] = [
         max: 100,
       },
       moisture: {
-        min: 0,
+        min: 60,
         max: 100,
       },
       height: {
         min: 0,
+        max: 82,
+      },
+      light: {
+        min: 0,
+        max: 100,
+      },
+    },
+    growsInto: ["pine"],
+  },
+  {
+    id: "shrub-highland",
+    type: "shrub",
+    name: "Highland Shrub",
+    color: "#95C577",
+    palette: {
+      base: "#128440", //
+      secondary: "#85bf9c", //
+      accent1: "#2e754a", //
+      accent2: "#3dc373", //
+    },
+    spriteSet: {
+      [Layer.GROUNDCOVER]: ["shrub"],
+    },
+    needs: {
+      temperature: {
+        min: 0,
+        max: 70,
+      },
+      moisture: {
+        min: 10,
+        max: 60,
+      },
+      height: {
+        min: 77,
         max: 100,
       },
       light: {
@@ -152,10 +217,12 @@ const dataActors: SpeciesDef[] = [
         max: 100,
       },
     },
+    growsInto: ["birch", "maple"],
   },
   {
     // mushroom
     id: "mushroom",
+    type: "creature",
     name: "Mushroom",
     spriteSet: {
       [IconLayer.ICON]: ["idle_000"],
@@ -185,6 +252,7 @@ const dataActors: SpeciesDef[] = [
   {
     // cow
     id: "cow",
+    type: "creature",
     name: "Cow",
     spriteSet: {
       [IconLayer.ICON]: ["walk_down/walk_down_000"],
@@ -214,6 +282,7 @@ const dataActors: SpeciesDef[] = [
   {
     // seagull
     id: "seagull",
+    type: "creature",
     name: "Seagull",
     spriteSet: {
       [IconLayer.ICON]: ["up/bird_seagull_up_000"],
@@ -243,6 +312,7 @@ const dataActors: SpeciesDef[] = [
   {
     // sharkblue
     id: "sharkblue",
+    type: "creature",
     name: "Blue Shark",
     spriteSet: {
       [IconLayer.ICON]: ["right/right_000"],

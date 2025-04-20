@@ -5,6 +5,7 @@ import { MoveAction } from "../actions/moveAction";
 import { WaitAction } from "../actions/waitAction";
 import { HarvestAction } from "../actions/harvestAction";
 import { WanderAction } from "../actions/wanderAction";
+import { ConsumePlantAction } from "../actions/consumePlantAction";
 import {
   ActorBase,
   CanFruit,
@@ -19,6 +20,7 @@ import { SystemPathfinder } from "../system-pathfinder";
 import { Tile } from "../tile";
 import { Layer } from "../renderer";
 import { SystemAnimated } from "../system-animated";
+import { SystemActors } from "../system-actors";
 
 export class BrainCow implements Brain {
   action: Action | null;
@@ -39,9 +41,9 @@ export class BrainCow implements Brain {
 
   private planGoal(): Action {
     for (let i = 0; i < 25; i++) {
-      const plantTargets: ActorBase[] = this.game.actorManager.getNearestActors(
+      const plantTargets: ActorBase[] = SystemActors.getNearest(
         this.actor.position,
-        ["canGrow", "position"],
+        ["lastGrowth", "position"],
         50 // count to return
       ); // hacky way to find shrubs for now
       const plantTarget: ActorBase & WithPosition & WithLayer =
@@ -55,11 +57,11 @@ export class BrainCow implements Brain {
           this.actor.layer
         );
         // check if reachable
-        return new HarvestAction(
+        return new ConsumePlantAction(
           this.game,
           this.actor,
           translatedPosition,
-          plantTarget as ActorBase & WithPosition & CanFruit
+          plantTarget
         );
       }
     }

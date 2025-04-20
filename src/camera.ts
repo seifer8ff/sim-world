@@ -20,6 +20,7 @@ import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
 import { ActorBase, isActor } from "./actor";
 import { SystemPointer } from "./system-pointer";
+import { SystemActors } from "./system-actors";
 
 export interface Viewport {
   width: number;
@@ -206,7 +207,7 @@ export class Camera {
     this.pointerTarget = null;
     this.viewportTarget = null;
     SystemPointer.clearPointer(
-      this.game.actorManager.withPointer,
+      SystemActors.queries.withPointer,
       this.game.actorManager
     );
   }
@@ -223,9 +224,10 @@ export class Camera {
     let actors: ActorBase[];
     let actor: ActorBase;
 
-    actors = this.game.actorManager.getActorsAt(x, y);
+    actors = SystemActors.getAt(x, y);
     if (actors?.length) {
       actor = actors[0];
+      console.log("set pointer target to actor: ", actor);
       this.setPointerTarget(actor.position, actor, viewportTarget);
       return this.pointerTarget;
     }
@@ -357,37 +359,35 @@ export class Camera {
     return tiles;
   }
 
-  public getViewport(): {
+  public calculateViewport(): {
     unpadded: Viewport;
     padded: Viewport;
   } {
     const center = this.getViewportCenterTile();
-
-    const unpaddedWidthTiles =
-      this.ui.gameCanvasContainer.clientWidth /
-      (Tile.size * this.ui.application.stage.scale.x);
-    const unpaddedHeightTiles =
-      this.ui.gameCanvasContainer.clientHeight /
-      (Tile.size * this.ui.application.stage.scale.x);
-    const paddedWidthTiles = unpaddedWidthTiles + 15;
-    const paddedHeightTiles = unpaddedHeightTiles + 15;
-    const viewports = {
-      unpadded: {
-        width: Math.ceil(unpaddedWidthTiles) + 1,
-        height: Math.ceil(unpaddedHeightTiles) + 1,
-        center,
-        tiles: [],
-      },
-      padded: {
-        width: Math.ceil(paddedWidthTiles),
-        height: Math.ceil(paddedHeightTiles),
-        center,
-        tiles: [],
-      },
+    const scale = Tile.size * this.ui.application.stage.scale.x; // scale of the viewport in pixels per tile
+    const modifier = GameSettings.options.toggles.debugViewport
+      ? (this.ui.gameCanvasContainer.clientWidth / 8) * 2 // add modifier to each side of the viewport
+      : 0;
+    const unpadded = {
+      width: (this.ui.gameCanvasContainer.clientWidth - modifier) / scale,
+      height: (this.ui.gameCanvasContainer.clientHeight - modifier) / scale,
+      center,
+      tiles: [],
     };
-    viewports.unpadded.tiles = this.getTilesForViewport(viewports.unpadded); // unpadded tiles
-    viewports.padded.tiles = this.getTilesForViewport(viewports.padded); // padded tiles
-    return viewports;
+    unpadded.width = Math.ceil(unpadded.width) + 1; // +1 to include the center tile
+    unpadded.height = Math.ceil(unpadded.height) + 1; // +1 to include the center tile
+    unpadded.tiles = this.getTilesForViewport(unpadded); // unpadded tiles
+    const padded = {
+      width: unpadded.width + GameSettings.options.viewportPadding, // padding for the viewport
+      height: unpadded.height + GameSettings.options.viewportPadding, // padding for the viewport
+      center,
+      tiles: [],
+    };
+    padded.tiles = this.getTilesForViewport(padded); // padded tiles
+    return {
+      unpadded,
+      padded,
+    };
   }
 
   private getViewportCenterTile(): Point {
@@ -641,11 +641,10 @@ export class Camera {
   private updateViewport() {
     // OLD VIEWPORT AND NEW VIEWPORT MUST MATCH (PADDED VS UNPADDED)
     const oldTiles = new Set(this.viewportUnpadded?.tiles || []);
-    const viewport = this.getViewport();
+    const viewport = this.calculateViewport();
     this.viewportPadded = viewport.padded;
     this.viewportUnpadded = viewport.unpadded;
 
-    // const enteredTiles: Point[] = [];
     const enteredTiles: number[] = [];
     let point: Point;
     // OLD VIEWPORT AND NEW VIEWPORT MUST MATCH (PADDED VS UNPADDED)
@@ -653,7 +652,6 @@ export class Camera {
       if (!oldTiles.has(tileIndex)) {
         point = indexToPosition(tileIndex, Layer.TERRAIN);
         if (this.game.map.isPointInMap(point)) {
-          // enteredTiles.push(point);
           enteredTiles.push(tileIndex);
         }
       }

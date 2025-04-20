@@ -34,7 +34,7 @@ export class TimeManager {
   public currentYear: number;
   public currentDay: number;
   public currentTime: number;
-  public currentTurn: number;
+  public static currentTurn: number = 0;
   public remainingCyclePercent: number; // how much time left before day/night cycles. expressed as decimal
   public remainingPhasePercent: number; // how much time left before light phase changes. expressed as decimal
 
@@ -54,7 +54,7 @@ export class TimeManager {
     this.currentYear = 1;
     this.currentDay = 1;
     this.currentTime = 0;
-    this.currentTurn = 0;
+    // this.currentTurn = 0;
     this.isDayTime = true;
     this.lightPhase = LightPhase.rising;
     this.isNighttime = !this.isDayTime;
@@ -105,13 +105,16 @@ export class TimeManager {
   }
 
   public calculateCurrentTime(): void {
-    this.currentTurn = this.scheduler.getTime();
+    TimeManager.currentTurn = this.scheduler.getTime();
     const totalDayLength = this.dayLength + this.nightLength;
     this.currentYear =
-      Math.floor(this.currentTurn / totalDayLength / this.daysPerYear) + 1;
+      Math.floor(TimeManager.currentTurn / totalDayLength / this.daysPerYear) +
+      1;
     this.currentDay =
-      (Math.floor(this.currentTurn / totalDayLength) % this.daysPerYear) + 1;
-    this.currentTime = this.currentTurn % totalDayLength;
+      (Math.floor(TimeManager.currentTurn / totalDayLength) %
+        this.daysPerYear) +
+      1;
+    this.currentTime = TimeManager.currentTurn % totalDayLength;
     this.isNighttime = this.currentTime >= this.dayLength;
     this.isDayTime = !this.isNighttime;
 

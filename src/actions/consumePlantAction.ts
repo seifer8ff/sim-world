@@ -2,9 +2,9 @@ import { Game } from "../game";
 import { Point } from "../point";
 import { Action } from "./action";
 import { generateId } from "../misc-utility";
-import { ActorBase, CanFruit, WithPosition } from "../actor";
+import { ActorBase, WithPosition } from "../actor";
 
-export class HarvestAction implements Action {
+export class ConsumePlantAction implements Action {
   readonly id: number;
   readonly name: string;
   readonly description: string;
@@ -14,30 +14,23 @@ export class HarvestAction implements Action {
     private game: Game,
     private actor: ActorBase,
     public targetPos: Point, // where the action takes place
-    public target: ActorBase & WithPosition & CanFruit
+    public target: WithPosition
   ) {
     this.id = generateId();
-    this.name = "Harvest";
-    this.durationInTurns = 10;
+    this.name = "Consume Plant";
+    this.durationInTurns = 4;
   }
 
   run(): Promise<any> {
-    // TODO: interact with target tile
-    // console.log("harvest action");
     // console.log(
-    //   "Harvesting:",
+    //   "consuming:",
     //   this.target,
     //   "at:",
     //   this.targetPos,
     //   "by actor:",
     //   this.actor.id
     // );
-    this.target.fruitCount -= 1; // Decrease the fruit count of the target
-    if (this.target.fruitCount <= 0) {
-      // remove the target from the world
-      this.game.actorManager.remove(this.target);
-      // console.log("Removed target actor:", this.target.id);
-    }
+    this.game.actorManager.remove(this.target);
     return Promise.resolve();
   }
 }

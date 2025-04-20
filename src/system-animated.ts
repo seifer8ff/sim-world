@@ -1,16 +1,13 @@
 import { ActorBase, ActorTypeId, WithAnimation } from "./actor";
 import { Query } from "miniplex";
-import { Layer, Renderer } from "./renderer";
+import { Renderer } from "./renderer";
 import { Camera, Viewport } from "./camera";
 import { LightManager, RGBAColor } from "./light-manager";
 import { Color as ColorType } from "rot-js/lib/color";
 import { AnimatedSprite, Texture } from "pixi.js";
 import { GameSettings } from "./game-settings";
 import { BaseAnimationKey } from "./components/animation-map";
-import { Species, SpeciesId } from "./species";
 import { Tile } from "./tile";
-import { IconLayer } from "./data-actors";
-import { RNG } from "rot-js";
 
 export type AnimId = "test";
 
@@ -39,12 +36,11 @@ export class SystemAnimated {
   ) {
     let tint: ColorType | RGBAColor | undefined = undefined;
     for (const { sprite, position, layer } of actors) {
-      let { x, y } = position;
-      tint = lightManager.getLightFor(x, y, false, true);
-
-      if (Camera.inViewport(x, y, layer, viewport)) {
-        renderer.renderDisplayObject(sprite, layer, tint as ColorType);
+      if (!Camera.inViewport(position.x, position.y, layer, viewport)) {
+        continue;
       }
+      tint = lightManager.getLightFor(position.x, position.y, false, true);
+      renderer.renderDisplayObject(sprite, layer, tint as ColorType);
     }
   }
 

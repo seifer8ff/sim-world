@@ -5,7 +5,7 @@ import { Camera, Viewport } from "./camera";
 import { Tile } from "./tile";
 import { indexToPosition } from "./misc-utility";
 import { LightManager, RGBAColor } from "./light-manager";
-import { Texture } from "pixi.js";
+import { Point, Texture } from "pixi.js";
 import { MapWorld } from "./map-world";
 import { Color as ColorType } from "rot-js/lib/color";
 import { Species, SpeciesId } from "./species";
@@ -76,6 +76,68 @@ export class SystemStatic {
     }
   }
 
+  // public static renderGroundCover(
+  //   actors: Query<ActorBase>,
+  //   renderer: Renderer,
+  //   lightManager: LightManager,
+  //   viewport: Viewport
+  // ): void {
+  //   const denseSize = Tile.denseSize;
+  //   const halfTileSize = Tile.size / 2;
+  //   const groundCoverLayer = renderer.groundCoverLayer[0];
+  //   let tileTexture: Texture | undefined = undefined;
+  //   let tint: ColorType;
+  //   let actor: ActorBase;
+
+  //   const denseRatio = Tile.tileDensityRatio;
+
+  //   for (const tileIndex of viewport.tiles) {
+  //     let terrainPos = indexToPosition(tileIndex, Layer.TERRAIN);
+  //     const startGroundCoverPos = Tile.translatePoint(
+  //       terrainPos,
+  //       Layer.TERRAIN,
+  //       Layer.GROUNDCOVER
+  //     );
+  //     let groundCoverPos = new Point(
+  //       startGroundCoverPos.x,
+  //       startGroundCoverPos.y
+  //     );
+
+  //     for (let dx = 0; dx < denseRatio; dx++) {
+  //       for (let dy = 0; dy < denseRatio; dy++) {
+  //         groundCoverPos.x = startGroundCoverPos.x + dx;
+  //         groundCoverPos.y = startGroundCoverPos.y + dy;
+  //         if (ManagerShrubs.isShrubAt(groundCoverPos.x, groundCoverPos.y)) {
+  //           actor = ManagerShrubs.getShrubAt(
+  //             groundCoverPos.x,
+  //             groundCoverPos.y
+  //           );
+  //           // if (!actor) continue;
+  //           tint = lightManager.getLightFor(
+  //             terrainPos.x,
+  //             terrainPos.y,
+  //             false,
+  //             true
+  //           ) as ColorType;
+
+  //           tileTexture = SystemStatic.getTextureFor(
+  //             Species.allSpecies[actor.species],
+  //             Layer.GROUNDCOVER
+  //           );
+  //           if (!tileTexture) continue;
+
+  //           groundCoverLayer.tile(
+  //             tileTexture,
+  //             Math.floor(groundCoverPos.x * denseSize - halfTileSize),
+  //             Math.floor(groundCoverPos.y * denseSize - halfTileSize),
+  //             { alpha: 1, tint: tint }
+  //           );
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+
   public static renderGroundCover(
     actors: Query<ActorBase>,
     renderer: Renderer,
@@ -90,13 +152,15 @@ export class SystemStatic {
     let tint: ColorType;
 
     for (const { position, layer, species } of actors) {
+      if (!Camera.inViewport(position.x, position.y, layer, viewport)) {
+        continue;
+      }
       tileTexture = SystemStatic.getTextureFor(
         Species.allSpecies[species],
         Layer.GROUNDCOVER
       );
       if (!tileTexture) continue;
 
-      let { x, y } = position;
       let terrainPos = Tile.translatePoint(
         position,
         layer, // actor's layer
@@ -109,14 +173,12 @@ export class SystemStatic {
         true
       ) as ColorType;
 
-      if (Camera.inViewport(x, y, layer, viewport)) {
-        groundCoverLayer.tile(
-          tileTexture,
-          Math.floor(x * denseSize - halfTileSize),
-          Math.floor(y * denseSize - halfTileSize),
-          { alpha: 1, tint: tint }
-        );
-      }
+      groundCoverLayer.tile(
+        tileTexture,
+        Math.floor(position.x * denseSize - halfTileSize),
+        Math.floor(position.y * denseSize - halfTileSize),
+        { alpha: 1, tint: tint }
+      );
     }
   }
 
