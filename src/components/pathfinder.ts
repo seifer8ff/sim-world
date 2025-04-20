@@ -4,6 +4,7 @@ import { Game } from "../game";
 import { Biome, BiomeId, Biomes } from "../biomes";
 import { Layer } from "../renderer";
 import { Path, RNG } from "rot-js";
+import { SystemCollision } from "../system-collision";
 
 export class Pathfinder {
   private target: Point;
@@ -39,8 +40,8 @@ export class Pathfinder {
     return (
       inRange &&
       traversableBiome &&
-      (!this.game.collisionManager.isBlocked(x, y) ||
-        this.game.collisionManager.isOccupiedBySelf(x, y, this.actor.id))
+      (!SystemCollision.isBlocked(x, y, this.game.map) ||
+        SystemCollision.isOccupiedBySelf(x, y, this.actor.id))
     );
   }
 

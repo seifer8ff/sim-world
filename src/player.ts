@@ -13,6 +13,7 @@ import { PointerTarget } from "./camera";
 import { generateId } from "./misc-utility";
 import { Renderable } from "./renderer";
 import { GameSettings } from "./game-settings";
+import { SystemCollision } from "./system-collision";
 
 export class Player {
   id: number;
@@ -95,7 +96,9 @@ export class Player {
         this.position.x + diff[0],
         this.position.y + diff[1]
       );
-      if (!this.game.collisionManager.isMapBlocked(newPoint.x, newPoint.y)) {
+      if (
+        !SystemCollision.isMapBlocked(newPoint.x, newPoint.y, this.game.map)
+      ) {
         return;
       }
       this.position = newPoint;

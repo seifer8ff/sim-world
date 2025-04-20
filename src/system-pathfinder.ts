@@ -3,6 +3,7 @@ import { Path, RNG } from "rot-js";
 import { Point } from "./point";
 import { Biome, BiomeId } from "./biomes";
 import { Game } from "./game";
+import { SystemCollision } from "./system-collision";
 
 // handle finding paths
 export class SystemPathfinder {
@@ -41,8 +42,8 @@ export class SystemPathfinder {
     return (
       inRange &&
       traversableBiome &&
-      (!this.game.collisionManager.isBlocked(x, y) ||
-        this.game.collisionManager.isOccupiedBySelf(x, y, actor.id))
+      (!SystemCollision.isBlocked(x, y, this.game.map) ||
+        SystemCollision.isOccupiedBySelf(x, y, actor.id))
     );
   }
 

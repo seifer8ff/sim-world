@@ -13,6 +13,7 @@ import { Query } from "miniplex";
 import { ActorBase } from "./actor";
 import { Camera } from "./camera";
 import { SystemActors } from "./system-actors";
+import { SystemCollision } from "./system-collision";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -190,11 +191,11 @@ export class LightManager {
       return false;
     }
 
-    if (this.game.collisionManager.isMapBlocked(x, y)) {
+    if (SystemCollision.isMapBlocked(x, y, this.map)) {
       return false;
     }
 
-    if (this.game.collisionManager.isBlockedOnLayer(x, y, Layer.SMALLACTOR)) {
+    if (SystemCollision.isBlockedOnLayer(x, y, Layer.SMALLACTOR)) {
       return false;
     }
 

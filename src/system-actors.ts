@@ -18,6 +18,7 @@ import {
 } from "./actor";
 import { AnimatedSprite, Sprite } from "pixi.js";
 import { SystemAnimated } from "./system-animated";
+import { SystemCollision } from "./system-collision";
 
 export class SystemActors {
   public static world: World<ActorBase> = new World<ActorBase>(); // static world for all actors
@@ -156,7 +157,7 @@ export class SystemActors {
       this.game.timeManager.addToSchedule(actor, true);
     }
     if (actor.collider) {
-      this.game.collisionManager.occupyTile(
+      SystemCollision.occupyTile(
         actor.position.x,
         actor.position.y,
         actor.layer,
@@ -171,7 +172,7 @@ export class SystemActors {
 
   public remove(actor: ActorBase): void {
     if (!actor.position) return;
-    this.game.collisionManager.clearEntityTile(
+    SystemCollision.clearEntityTile(
       actor.position.x,
       actor.position.y,
       actor.layer

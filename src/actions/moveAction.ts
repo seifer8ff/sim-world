@@ -6,6 +6,7 @@ import { MapWorld } from "../map-world";
 import { generateId } from "../misc-utility";
 import { GameSettings } from "../game-settings";
 import { ActorBase } from "../actor";
+import { SystemCollision } from "../system-collision";
 
 export class MoveAction implements Action {
   readonly id: number;
@@ -66,13 +67,13 @@ export class MoveAction implements Action {
 
   private move() {
     // clear the old position in the collision manager
-    this.game.collisionManager.clearEntityTile(
+    SystemCollision.clearEntityTile(
       this.actor.position.x,
       this.actor.position.y,
       this.actor.layer
     );
     // update collision
-    this.game.collisionManager.occupyTile(
+    SystemCollision.occupyTile(
       this.targetPos.x,
       this.targetPos.y,
       this.actor.layer,

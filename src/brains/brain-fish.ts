@@ -14,6 +14,7 @@ import {
 import { Brain } from "./brain";
 import { SystemPathfinder } from "../system-pathfinder";
 import { SystemAnimated } from "../system-animated";
+import { SystemCollision } from "../system-collision";
 
 export class BrainFish implements Brain {
   action: Action | null;
@@ -53,14 +54,18 @@ export class BrainFish implements Brain {
   }
 
   private isGoalReachable(goal: Action): boolean {
-    const isSelfBlocked = this.game.collisionManager.isOccupiedBySelf(
+    const isSelfBlocked = SystemCollision.isOccupiedBySelf(
       goal.targetPos.x,
       goal.targetPos.y,
       this.actor.id
     );
     return (
       isSelfBlocked ||
-      !this.game.collisionManager.isBlocked(goal.targetPos.x, goal.targetPos.y)
+      !SystemCollision.isBlocked(
+        goal.targetPos.x,
+        goal.targetPos.y,
+        this.game.map
+      )
     );
   }
 

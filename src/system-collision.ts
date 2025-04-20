@@ -5,19 +5,15 @@ import { MapWorld } from "./map-world";
 import { GameSettings } from "./game-settings";
 import { Tile } from "./tile";
 
-export class ManagerCollision {
-  public actorCollisionGrid: Int32Array;
-  private map: MapWorld;
-  private layers: Layer[];
+export class SystemCollision {
+  public static actorCollisionGrid: Int32Array;
+  private static blockingLayers: Layer[];
 
-  constructor(private game: Game) {
-    this.map = this.game.map;
-    this.initGrid();
-  }
+  constructor() {}
 
-  private initGrid() {
-    this.layers = [Layer.ACTOR, Layer.SMALLACTOR];
-    const layerCount = Layer.UI + 1;
+  public static init() {
+    this.blockingLayers = [Layer.ACTOR, Layer.SMALLACTOR];
+    const layerCount = Layer.UI + 1; // must match renderer to have matching indexes
     let gridSize =
       GameSettings.options.gameSize.width *
       Tile.tileDensityRatio *
@@ -27,8 +23,8 @@ export class ManagerCollision {
     this.actorCollisionGrid = new Int32Array(gridSize);
   }
 
-  public occupyTile(x: number, y: number, layer: Layer, id: number) {
-    if (this.layers.includes(layer)) {
+  public static occupyTile(x: number, y: number, layer: Layer, id: number) {
+    if (this.blockingLayers.includes(layer)) {
       const index = positionToIndex(x, y, layer);
       this.actorCollisionGrid[index] = id;
     } else {
@@ -36,22 +32,26 @@ export class ManagerCollision {
     }
   }
 
-  public clearEntityTile(x: number, y: number, layer: Layer) {
+  public static clearEntityTile(x: number, y: number, layer: Layer) {
     const index = positionToIndex(x, y, layer);
-    this.actorCollisionGrid[index] = 0;
+    SystemCollision.actorCollisionGrid[index] = 0;
   }
 
-  public isBlockedOnLayer(x: number, y: number, layer: Layer): boolean {
+  public static isBlockedOnLayer(x: number, y: number, layer: Layer): boolean {
     const index = positionToIndex(x, y, layer);
-    return this.actorCollisionGrid[index] !== 0;
+    return SystemCollision.actorCollisionGrid[index] !== 0;
   }
 
-  public isBlocked(
+  // is blocked:
+  // - is the tile occupied by another actor?
+  // - is the map tile passable? (walkable biome, no tile borders, water, etc.)
+  public static isBlocked(
     x: number,
     y: number,
+    map: MapWorld,
     originLayer: Layer = Layer.TERRAIN
   ): boolean {
-    if (this.isMapBlocked(x, y, originLayer)) {
+    if (SystemCollision.isMapBlocked(x, y, map, originLayer)) {
       return true;
     }
 
@@ -59,7 +59,7 @@ export class ManagerCollision {
     let layerX: number;
     let layerY: number;
 
-    for (const layer of this.layers) {
+    for (const layer of this.blockingLayers) {
       layerX = Tile.translate(x, originLayer, layer);
       layerY = Tile.translate(y, originLayer, layer);
       if (originLayer === Layer.TERRAIN && Tile.isDenseLayer(layer)) {
@@ -81,22 +81,31 @@ export class ManagerCollision {
     return false;
   }
 
-  public isMapBlocked(
+  public static isMapBlocked(
     x: number,
     y: number,
+    map: MapWorld,
     originLayer: Layer = Layer.TERRAIN
   ): boolean {
     const terrainX = Tile.translate(x, originLayer, Layer.TERRAIN);
     const terrainY = Tile.translate(y, originLayer, Layer.TERRAIN);
-    return !this.map.isPassable(terrainX, terrainY);
+    return !map.isPassable(terrainX, terrainY);
   }
 
-  public isOccupiedByActor(x: number, y: number, actorId: number): boolean {
+  public static isOccupiedByActor(
+    x: number,
+    y: number,
+    actorId: number
+  ): boolean {
     const index = positionToIndex(x, y, Layer.ACTOR);
-    return this.actorCollisionGrid[index] === actorId;
+    return SystemCollision.actorCollisionGrid[index] === actorId;
   }
 
-  public isOccupiedBySelf(x: number, y: number, actorId: number): boolean {
-    return this.isOccupiedByActor(x, y, actorId);
+  public static isOccupiedBySelf(
+    x: number,
+    y: number,
+    actorId: number
+  ): boolean {
+    return SystemCollision.isOccupiedByActor(x, y, actorId);
   }
 }

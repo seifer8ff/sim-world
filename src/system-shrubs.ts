@@ -18,7 +18,7 @@ import { SystemActors } from "./system-actors";
 import { BiomeId, Biomes } from "./biomes";
 import { Tile } from "./tile";
 import { TimeManager } from "./time-manager";
-import { ManagerCollision } from "./manager-collision";
+import { SystemCollision } from "./system-collision";
 
 export class SystemShrubs {
   public static spacialMap: Map<number, WithPosition> = new Map<
@@ -125,15 +125,14 @@ export class SystemShrubs {
   public static updateGrowth(
     shrubs: Query<ActorBase & WithGrowth & WithPosition & WithLayer>,
     actorManager: SystemActors,
-    map: MapWorld,
-    collision: ManagerCollision
+    map: MapWorld
   ): void {
     for (const shrub of shrubs) {
       if (
         TimeManager.currentTurn - shrub.lastGrowth >
         RNG.getUniformInt(10, 30)
       ) {
-        SystemShrubs.growShrub(shrub, actorManager, map, collision);
+        SystemShrubs.growShrub(shrub, actorManager, map);
       }
     }
   }
@@ -155,8 +154,7 @@ export class SystemShrubs {
   public static growShrub(
     shrub: ActorBase,
     actorManager: SystemActors,
-    map: MapWorld,
-    collision: ManagerCollision
+    map: MapWorld
   ): boolean {
     shrub.lastGrowth = TimeManager.currentTurn;
     SystemActors.world.reindex(shrub);
@@ -184,21 +182,20 @@ export class SystemShrubs {
       return true;
     }
 
-    return this.addShrub(shrub, actorManager, map, collision, odds);
+    return this.addShrub(shrub, actorManager, map, odds);
   }
 
   private static addShrub(
     shrub: ActorBase,
     actorManager: SystemActors,
     map: MapWorld,
-    collision: ManagerCollision,
     odds: { skipShrubAddition: number; suitablePosScore: number }
   ): boolean {
     if (RNG.getUniform() < odds.skipShrubAddition) {
       return false;
     }
 
-    const emptyTiles = this.getGrowthPositions(shrub, collision);
+    const emptyTiles = this.getGrowthPositions(shrub, map);
 
     if (emptyTiles.length > 0) {
       const suitableTiles = this.calculateNeedsScores(
@@ -268,15 +265,17 @@ export class SystemShrubs {
     return false;
   }
 
-  private static getGrowthPositions(
-    shrub: ActorBase,
-    collision: ManagerCollision
-  ): Point[] {
+  private static getGrowthPositions(shrub: ActorBase, map: MapWorld): Point[] {
     return SystemShrubs.growthDirections
       .flat()
       .map((dir) => shrub.position.add(dir))
       .filter((pos) => {
-        const isBlocked = collision.isMapBlocked(pos.x, pos.y, shrub.layer); // check if the tile is blocked by terrain or other actors
+        const isBlocked = SystemCollision.isMapBlocked(
+          pos.x,
+          pos.y,
+          map,
+          shrub.layer
+        ); // check if the tile is blocked by terrain or other actors
         return (
           !isBlocked &&
           !SystemShrubs.spacialMap.has(

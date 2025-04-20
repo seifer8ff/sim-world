@@ -27,6 +27,7 @@ import { Assets, Sprite, Texture } from "pixi.js";
 import { GameSettings } from "./game-settings";
 import { shuffle } from "lodash";
 import { TileStats } from "./web-components/tile-info";
+import { SystemCollision } from "./system-collision";
 
 export type MapType = ValueMap | BiomeMap | TileMap;
 export type ValueMap = Map<number, number>;
@@ -973,9 +974,10 @@ export class MapWorld {
       ) {
         if (
           unblockedOnly &&
-          !this.game.collisionManager.isBlocked(
+          !SystemCollision.isBlocked(
             randPos.x,
             randPos.y,
+            this,
             Layer.SMALLACTOR
           )
         ) {

@@ -13,7 +13,7 @@ import { InitAssetsStage1, InitAssetsStage2 } from "./assets";
 import { GameSettings } from "./game-settings";
 import { SystemActors } from "./system-actors";
 import { SystemTrees } from "./system-trees";
-import { ManagerCollision } from "./manager-collision";
+import { SystemCollision } from "./system-collision";
 import { ActorBase } from "./actor";
 import { SystemAnimated } from "./system-animated";
 import { SystemStatic } from "./system-static";
@@ -30,7 +30,6 @@ export class Game {
   public renderer: Renderer;
   public animManager: ManagerAnimation;
   public actorManager: SystemActors;
-  public collisionManager: ManagerCollision;
   public pathfinder: SystemPathfinder;
   public timeManager: TimeManager;
   public userInterface: UserInterface;
@@ -93,7 +92,7 @@ export class Game {
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height
     );
-    this.collisionManager = new ManagerCollision(this);
+    SystemCollision.init();
     this.pathfinder = new SystemPathfinder(this);
     // let a few turns pass, do any world setup needed
     const gameSetup = new GameSetup(this);
@@ -173,8 +172,7 @@ export class Game {
       SystemShrubs.updateGrowth(
         SystemActors.queries.groundCoverGrowth,
         this.actorManager,
-        this.map,
-        this.collisionManager
+        this.map
       );
       SystemShrubs.handleDeath(
         SystemActors.queries.groundCoverGrowth,
