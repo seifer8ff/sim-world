@@ -21,6 +21,7 @@ import { GameSettings } from "./game-settings";
 import { ActorBase, isActor } from "./actor";
 import { SystemPointer } from "./system-pointer";
 import { SystemActors } from "./system-actors";
+import { LLMStatus, SystemLLM } from "./system-llm";
 
 export interface Viewport {
   width: number;
@@ -192,13 +193,31 @@ export class Camera {
       if (viewportTarget) {
         this.viewportTarget = pos;
       }
+      if (GameSettings.options.toggles.enableLLM) {
+        SystemLLM.getStatusAt(
+          this.pointerTarget.position,
+          Layer.ACTOR,
+          this.game.map
+        )
+          .then((status) => {
+            this.displayTileStatus(status);
+          })
+          .catch((err) => {
+            console.error("Error getting status: ", err);
+          });
+      }
     }
     SystemPointer.spawnPointer(
       pos,
       this.game.actorManager,
       this.pointerTarget.target
     );
+
     this.ui.components.tileInfo.setContent(this.pointerTarget);
+  }
+
+  private displayTileStatus(status: LLMStatus) {
+    console.log(status.id, status.status, status.statusEmoji);
   }
 
   public clearPointerTarget() {

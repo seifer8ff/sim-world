@@ -14,6 +14,7 @@ export class GameSettings {
       enableShadows: true,
       enableAnimations: true,
       enableStats: true,
+      enableLLM: false,
       dayStart: true,
       debugViewport: false,
     },

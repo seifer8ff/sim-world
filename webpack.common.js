@@ -54,6 +54,7 @@ module.exports = {
     clean: true,
     globalObject: "this",
     path: path.resolve(__dirname, "dist"),
+    publicPath: "/dist/", // Ensure static paths for worker scripts
   },
   plugins: [
     new HtmlWebpackPlugin({

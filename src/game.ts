@@ -21,6 +21,7 @@ import { SystemPathfinder } from "./system-pathfinder";
 import { GameSetup } from "./game-setup";
 import { SystemPointer } from "./system-pointer";
 import { SystemShrubs } from "./system-shrubs";
+import { SystemLLM } from "./system-llm";
 
 export class Game {
   public settings: GameSettings;
@@ -82,6 +83,7 @@ export class Game {
     this.map.shadowMap.init();
     this.map.lightManager.init();
     this.renderer.init();
+    SystemLLM.init();
     this.gameState.reset();
   }
 
