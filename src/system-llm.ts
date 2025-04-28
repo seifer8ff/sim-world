@@ -17,7 +17,7 @@ export interface LLMStatus {
 export interface LLMActorStatus {
   thought: string;
   statusEmoji: string;
-  color: string;
+  statusColor: string;
 }
 
 export class SystemLLM {
@@ -80,9 +80,11 @@ export class SystemLLM {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama3.2:3b", // #1
+          // model: "llama3.2:3b", // #1
+          model: "mistral:7b", // #1
           messages,
           max_tokens: 128,
+          response_format: { type: "json_object" },
         }),
       });
 
@@ -109,27 +111,16 @@ export class SystemLLM {
     response: webllm.ChatCompletion
   ): LLMStatus {
     let content = response.choices[0].message.content;
-
-    // fix for emoji not being wrapped in quotes
-    content.replace(
-      /\\u[0-9A-Fa-f]{4}(\\u[0-9A-Fa-f]{4})?/g,
-      (match) => `"${match}"`
-    );
-
-    // structured as "id|status|statusEmoji"
-    // e.g. "0|Too hot to handle|🔥"
-    const parts = content
-      .split("|")
-      .map((part) => part.trim())
-      .filter((part) => part !== "");
-    if (parts.length < 3) {
-      throw new Error("Invalid response format from Jan server");
+    try {
+      // read the json object from the content
+      const parsedStatus: LLMStatus = JSON.parse(content);
+      return parsedStatus;
+    } catch (error) {
+      console.error("Error parsing JSON:", error);
+      throw new Error(
+        "Failed to parse JSON response from Jan server. TODO: retry request."
+      );
     }
-    return {
-      id: parts[0],
-      status: parts[1],
-      statusEmoji: parts[2],
-    };
   }
 
   private static processActorStatusResponse(
@@ -137,26 +128,17 @@ export class SystemLLM {
   ): LLMActorStatus {
     let content = response.choices[0].message.content;
 
-    // fix for emoji not being wrapped in quotes
-    content.replace(
-      /\\u[0-9A-Fa-f]{4}(\\u[0-9A-Fa-f]{4})?/g,
-      (match) => `"${match}"`
-    );
-
-    // structured as "id|thought|statusEmoji|color"
-    // e.g. "0|Too hot to handle|🔥"
-    const parts = content
-      .split("|")
-      .map((part) => part.trim())
-      .filter((part) => part !== "");
-    if (parts.length < 3) {
-      throw new Error("Invalid response format from Jan server");
+    try {
+      // read the json object from the content
+      const parsedStatus: LLMActorStatus = JSON.parse(content);
+      console.log("parsedActorStatus", parsedStatus);
+      return parsedStatus;
+    } catch (error) {
+      console.error("Error parsing JSON:", error);
+      throw new Error(
+        "Failed to parse JSON response from Jan server. TODO: retry request."
+      );
     }
-    return {
-      thought: parts[0],
-      statusEmoji: parts[1],
-      color: parts[2],
-    };
   }
 
   private static generateStatusRequest(
@@ -165,7 +147,9 @@ export class SystemLLM {
     return [
       {
         role: "system",
-        content: `VERY IMPORTANT: Your response should be a single line with 3 sections, separated by | character. There should be no other characters.`,
+        content: `Reply ONLY with a JSON object matching this structure:
+        \n\n{\n  \"id\": \"number\",\n  \"status\": \"string\",\n  \"statusEmoji\": string\n}\n\nExample:\n{\n  \"id\": 0,\n  \"status\": \"Bright and buzzy morning\",\n  \"statusEmoji\": \"\u{1F60A}\"\n }\n\nDo not add any commentary or explanation. Reply ONLY with a valid JSON object.
+        `,
       },
       {
         role: "user",
@@ -173,14 +157,16 @@ export class SystemLLM {
           tileStats.biome.generationOptions
         )} 
         Position Status: ${JSON.stringify(tileStats)}.
-        Response Format: Send a single line with three sections, separated by | character.
-        First line: whole number starting at 0.
-        Second line: a 3 - 7 word humorously wry alliteration about the climate, very short.
-        Third line: a text emoji representing its suitability to its biome.`,
+        Response: Send a JSON object with the following fields:
+        id: ascending  whole number starting at 0.
+        statusEmoji: a 3 - 7 word humorously wry alliteration about the climate, very short.
+        emoji: a unicode emoji representing its suitability to its biome.`,
       },
       {
         role: "system",
-        content: `DON'T FORGET THE | CHARACTER BETWEEN EACH SECTION. DON'T FORGET TO BE ALLITERATIVE WITH WRY HUMOR.`,
+        content: `Reply ONLY with a JSON object matching this structure:
+        \n\n{\n  \"id\": \"number\",\n  \"status\": \"string\",\n  \"statusEmoji\": string\n}\n\nExample:\n{\n  \"id\": 0,\n  \"status\": \"Bright and buzzy morning\",\n  \"statusEmoji\": \"\u{1F60A}\"\n }\n\nDo not add any commentary or explanation. Reply ONLY with a valid JSON object.
+        `,
       },
     ];
   }
@@ -196,7 +182,9 @@ export class SystemLLM {
     return [
       {
         role: "system",
-        content: `VERY IMPORTANT: Your response should be a single line with 3 sections, separated by | character. There should be no other characters.`,
+        content: `Reply ONLY with a JSON object matching this structure:
+        \n\n{\n  \"status\": \"string\",\n  \"statusEmoji\": \"string\",\n  \"statusColor\": string\n}\n\nExample:\n{\n  \"status\": \"Bright and buzzy morning\",\n  \"statusEmoji\": \"\u{1F60A}\",\n  \"statusColor\": \"#0000FF\"\n }\n\nDo not add any commentary or explanation. Reply ONLY with a valid JSON object.
+        `,
       },
       {
         role: "user",
@@ -205,14 +193,16 @@ export class SystemLLM {
         )} 
         Position Status: ${JSON.stringify(tileStats)}.
         Actor Status: ${JSON.stringify(actorPrimitiveProps)}.
-        Response Format: Send a single line with multiple sections, separated by | character.
-        First section: SINGLE SENTENCE thought based on how the actor feels. TEXT ONLY, NO EMOJIS, NO SPECIAL CHARACTERS. VERY SHORT, wry humor, alliteration.
-        Second section: a text emoji representing the actor's mental state.
-        Third section: a hex color representing the actor's mental state.`,
+        Response: Send a JSON object with the following fields:
+        status: SINGLE SENTENCE thought based on how the actor feels. TEXT ONLY, NO EMOJIS, NO SPECIAL CHARACTERS. VERY SHORT, wry humor, alliteration.
+        statusEmoji: a unicode emoji representing the actor's mental state.
+        statusColor: a hex color representing the actor's mental state.`,
       },
       {
         role: "system",
-        content: `DON'T FORGET THE | CHARACTER BETWEEN EACH SECTION. DON'T FORGET TO BE ALLITERATIVE WITH WRY HUMOR.`,
+        content: `Reply ONLY with a JSON object matching this structure:
+        \n\n{\n  \"status\": \"string\",\n  \"statusEmoji\": \"string\",\n  \"statusColor\": string\n}\n\nExample:\n{\n  \"status\": \"Bright and buzzy morning\",\n  \"statusEmoji\": \"\u{1F60A}\",\n  \"statusColor\": \"#0000FF\"\n }\n\nDo not add any commentary or explanation. Reply ONLY with a valid JSON object.
+        `,
       },
     ];
   }

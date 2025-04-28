@@ -229,7 +229,7 @@ export class Camera {
     console.log(
       (status as LLMStatus).status || (status as LLMActorStatus).thought,
       status.statusEmoji,
-      (status as LLMActorStatus).color
+      (status as LLMActorStatus).statusColor
     );
   }
 
