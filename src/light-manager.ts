@@ -14,6 +14,8 @@ import { Camera } from "./camera";
 import { SystemActors } from "./system-actors";
 import { SystemCollision } from "./system-collision";
 import { DayPhase, SystemTime } from "./system-time";
+import { SystemOcclusion } from "./system-occlusion";
+import { SystemShadows } from "./system-shadows";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -374,23 +376,24 @@ export class LightManager {
 
   public calculateLightMap(tiles: number[]) {
     const dynamicLightMap = this.dynamicLightMap;
-    const sunMap = this.map.shadowMap.shadowMap;
-    const occlusionMap = this.map.shadowMap.occlusionMap;
+    const shadowMap = SystemShadows.shadowMap;
+    // const occlusionMap = this.map.shadowMap.occlusionMap;
+    const occlusionMap = SystemOcclusion.occlusionMap;
     const cloudMap = this.map.cloudMap.cloudMap;
     let dynamicLightValue: ColorType;
-    let sunValue: number;
+    let shadowValue: number;
     let occlusionValue: number;
     let cloudValue: number;
     let light: ColorType;
 
     for (let posIndex of tiles) {
       dynamicLightValue = dynamicLightMap[posIndex];
-      sunValue = sunMap[posIndex];
+      shadowValue = shadowMap[posIndex];
       occlusionValue = occlusionMap[posIndex];
       cloudValue = cloudMap[posIndex];
       light = this.calculateLight(
         dynamicLightValue,
-        sunValue,
+        shadowValue,
         occlusionValue,
         cloudValue,
         false
@@ -492,14 +495,14 @@ export class LightManager {
   }
 
   public calculateLight(
-    lightMap: ColorType = null,
-    shadowMap: number = null,
-    occlusionMap: number = null,
-    cloudMap: number = null,
+    lightValue: ColorType = null,
+    shadowValue: number = null,
+    occlusionValue: number = null,
+    cloudValue: number = null,
     highlight: boolean = false
   ): ColorType {
     const { map } = this.game;
-    const { shadowMap: globalShadowMap, cloudMap: globalCloudMap } = map;
+    const { cloudMap: globalCloudMap } = map;
     const ambientLight = this.ambientLight;
     const isDaytime = SystemTime.isDayTime;
     const phase = SystemTime.lightPhase;
@@ -512,19 +515,19 @@ export class LightManager {
 
     const cloudMinLevel = globalCloudMap.cloudMinLevel;
     const sunbeamMaxLevel = globalCloudMap.sunbeamMaxLevel;
-    const shadowStrength = globalShadowMap.shadowStrength;
-    const ambOccShadowStrength = globalShadowMap.ambientOcclusionShadowStrength;
+    const shadowStrength = SystemShadows.shadowStrength;
+    const ambOccShadowStrength = SystemOcclusion.ambientOcclusionShadowStrength;
     const cloudStrength = globalCloudMap.cloudStrength;
     const sunbeamStrength = globalCloudMap.sunbeamStrength;
 
     // const isShadowed =
     //   Math.abs(shadowMap - globalShadowMap.ambientLightStrength) > 0.01;
     const isShadowed =
-      shadowMap - GameSettings.options.ambientLightStrength > 0.01 ||
-      shadowMap - GameSettings.options.ambientLightStrength < -0.01;
-    const isOccluded = occlusionMap !== 1;
-    const isClouded = cloudMap > cloudMinLevel;
-    const isCloudClear = cloudMap < sunbeamMaxLevel;
+      shadowValue - GameSettings.options.ambientLightStrength > 0.01 ||
+      shadowValue - GameSettings.options.ambientLightStrength < -0.01;
+    const isOccluded = occlusionValue !== 1;
+    const isClouded = cloudValue > cloudMinLevel;
+    const isCloudClear = cloudValue < sunbeamMaxLevel;
 
     // Reuse `cloudShadow` instead of reassigning
     let cloudShadow = Color.multiply(
@@ -545,14 +548,14 @@ export class LightManager {
     // Start with ambient light
     let light = ambientLight;
 
-    if (lightMap) {
-      light = Color.add(light, lightMap);
+    if (lightValue) {
+      light = Color.add(light, lightValue);
     } else {
       if (isOccluded) {
         light = Color.interpolate(
           light,
           LightManager.lightDefaults.ambientOcc,
-          (1 - occlusionMap) * ambOccShadowStrength
+          (1 - occlusionValue) * ambOccShadowStrength
         );
       }
       if (isShadowed) {
@@ -560,7 +563,7 @@ export class LightManager {
         light = Color.interpolate(
           light,
           shadow,
-          (1 - shadowMap) * shadowStrength
+          (1 - shadowValue) * shadowStrength
         );
       }
     }
@@ -572,7 +575,7 @@ export class LightManager {
       light = Color.interpolate(
         light,
         cloudShadow,
-        1 - cloudStrength * (1 - (cloudMap - cloudMinLevel))
+        1 - cloudStrength * (1 - (cloudValue - cloudMinLevel))
       );
     }
 
@@ -582,7 +585,7 @@ export class LightManager {
         isNight
           ? LightManager.lightDefaults.blueLight
           : LightManager.lightDefaults.yellowLight,
-        cloudStrength * ((sunbeamMaxLevel - cloudMap) * sunbeamStrength)
+        cloudStrength * ((sunbeamMaxLevel - cloudValue) * sunbeamStrength)
       );
     }
 

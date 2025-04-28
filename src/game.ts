@@ -22,6 +22,9 @@ import { GameSetup } from "./game-setup";
 import { SystemPointer } from "./system-pointer";
 import { SystemShrubs } from "./system-shrubs";
 import { SystemLLM } from "./system-llm";
+import { SystemOcclusion } from "./system-occlusion";
+import { SystemSunMoon } from "./system-sun-moon";
+import { SystemShadows } from "./system-shadows";
 
 export class Game {
   public settings: GameSettings;
@@ -80,7 +83,8 @@ export class Game {
     this.map.polesMap.init();
     this.map.tempMap.init();
     this.map.moistureMap.init();
-    this.map.shadowMap.init();
+    SystemShadows.init();
+    SystemOcclusion.init();
     this.map.lightManager.init();
     this.renderer.init();
     SystemLLM.init();
@@ -141,6 +145,7 @@ export class Game {
 
   public gameLoop() {
     const turn = SystemTime.currentTurn;
+    const viewport = this.userInterface.camera.viewportUnpadded;
     let actors: ActorBase[] = [];
 
     // loop through ALL actors each turn
@@ -181,7 +186,9 @@ export class Game {
       );
 
       this.map.lightManager.turnUpdate();
-      this.map.shadowMap.turnUpdate();
+      SystemSunMoon.turnUpdate();
+      SystemOcclusion.turnUpdate(this.map, viewport.tiles);
+      SystemShadows.turnUpdate(viewport, this.map);
       this.map.cloudMap.turnUpdate();
 
       // update dynamic lights after all actors have moved
@@ -209,10 +216,6 @@ export class Game {
 
     if (this.gameState.stage === Stages.Play) {
       SystemTime.renderUpdate(this.turnAnimDelayCounter);
-
-      if (GameSettings.options.toggles.enableShadows) {
-        this.map.shadowMap.renderUpdate(interpPercent);
-      }
 
       if (GameSettings.options.toggles.enableClouds) {
         this.map.cloudMap.renderUpdate(interpPercent);

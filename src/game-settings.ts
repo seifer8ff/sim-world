@@ -11,7 +11,8 @@ export class GameSettings {
       enableDynamicLights: true,
       enableClouds: true,
       enableCloudMask: false,
-      enableShadows: true,
+      enableSunShadows: true,
+      enableOcclusionShadows: true,
       enableAnimations: true,
       enableStats: true,
       enableLLM: false,
@@ -47,8 +48,8 @@ export class GameSettings {
     renderChunkCount: 1, // how many chunks to split the world into for rendering MUST BE ODD, ex: 3 = 3x3 = 9 chunks
     hideDenseLayersTileCount: 150 * 150, // hide dense layers (like groundcover) if the tile count exceeds this value
     ambientLightStrength: 0.8,
-    minShadowLength: 0,
-    maxShadowLength: 5,
+    minShadowLength: 1,
+    maxShadowLength: 8,
     viewportPadding: 15, // how many tiles to pad the viewport on each side
   };
   static worldSizeOptions = [
@@ -134,7 +135,8 @@ export class GameSettings {
     return (
       GameSettings.options.toggles.enableGlobalLights ||
       GameSettings.options.toggles.enableDynamicLights ||
-      GameSettings.options.toggles.enableShadows ||
+      GameSettings.options.toggles.enableSunShadows ||
+      GameSettings.options.toggles.enableOcclusionShadows ||
       GameSettings.options.toggles.enableClouds
     );
   }

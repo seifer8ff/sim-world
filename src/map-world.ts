@@ -18,7 +18,7 @@ import { MapMoisture } from "./map-moisture";
 import { Season, SystemTime } from "./system-time";
 import { Biome, BiomeId, Biomes, ImpassibleBorder } from "./biomes";
 import { Color as ColorType } from "rot-js/lib/color";
-import { MapShadows } from "./map-shadows";
+import { SystemShadows } from "./system-shadows";
 import { MapPoles } from "./map-poles";
 import { MapClouds } from "./map-clouds";
 import Noise from "rot-js/lib/noise/noise";
@@ -28,6 +28,8 @@ import { GameSettings } from "./game-settings";
 import { shuffle } from "lodash";
 import { TileStats } from "./web-components/tile-info";
 import { SystemCollision } from "./system-collision";
+import { SystemOcclusion } from "./system-occlusion";
+import { Viewport } from "./camera";
 
 export type MapType = ValueMap | BiomeMap | TileMap;
 export type ValueMap = Map<number, number>;
@@ -59,7 +61,6 @@ export class MapWorld {
   public heightLayerMap: Map<number, HeightLayer>;
   public tempMap: MapTemperature;
   public moistureMap: MapMoisture;
-  public shadowMap: MapShadows;
   public polesMap: MapPoles;
   public cloudMap: MapClouds;
   public seaLevel: number;
@@ -88,7 +89,6 @@ export class MapWorld {
     this.heightLayerMap = new Map();
     this.moistureMap = new MapMoisture(this.game, this);
     this.tempMap = new MapTemperature(this.game, this);
-    this.shadowMap = new MapShadows(this.game, this);
     this.polesMap = new MapPoles(this.game, this);
     this.cloudMap = new MapClouds(this.game, this);
     this.lightManager = new LightManager(this.game, this);
@@ -284,9 +284,11 @@ export class MapWorld {
     this.regenerateAdjacencyMap("heightLayer");
     // console.log("cloudMap", this.cloudMap.cloudMap);
     // console.log("moistureMap", this.moistureMap.moistureMap);
-    if (GameSettings.options.toggles.enableShadows) {
-      this.shadowMap.init(); // Initialize the shadows with the new real-time approach
-      this.shadowMap.turnUpdate(); // Update the shadow map for the current sun position
+    if (GameSettings.options.toggles.enableOcclusionShadows) {
+      SystemOcclusion.init();
+    }
+    if (GameSettings.options.toggles.enableSunShadows) {
+      SystemShadows.init(); // Initialize the shadows with the real-time approach
     }
 
     // finally, generate the tile map
@@ -1161,8 +1163,9 @@ export class MapWorld {
 
   getTotalLight(x: number, y: number): number {
     const posIndex = positionToIndex(x, y, Layer.TERRAIN);
-    const lightFromShadows = this.shadowMap.shadowMap[posIndex];
-    const lightFromOcc = this.shadowMap.occlusionMap[posIndex];
+    const lightFromShadows = SystemShadows.shadowMap[posIndex];
+    // const lightFromOcc = this.shadowMap.occlusionMap[posIndex];
+    const lightFromOcc = SystemOcclusion.occlusionMap[posIndex];
     const cloudLevel = this.cloudMap.get(posIndex);
     let lightFromClouds = 1;
     if (cloudLevel > this.cloudMap.cloudMinLevel) {
@@ -1189,10 +1192,12 @@ export class MapWorld {
     return finalLight;
   }
 
-  onTileEnterViewport(indexes: number[]): void {
-    this.shadowMap.onEnter(indexes);
-    this.cloudMap.onEnter(indexes);
-    this.lightManager.onEnter(indexes);
+  onTileEnterViewport(viewport: Viewport, tiles: number[]): void {
+    const map = this.game.map;
+    SystemOcclusion.onEnter(this.game.map, tiles);
+    SystemShadows.onEnter(viewport, map);
+    this.cloudMap.onEnter(tiles);
+    this.lightManager.onEnter(tiles);
     // TODO: add a step to render tile
     // this will fix shadows not updating immediately when panning
   }

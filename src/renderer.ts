@@ -1,14 +1,10 @@
 import * as PIXI from "pixi.js";
 import { Game } from "./game";
-import { Point } from "./point";
 import { Tile } from "./tile";
 import { Color } from "rot-js";
 import { Color as ColorType } from "rot-js/lib/color";
-import { MapWorld } from "./map-world";
 import { CompositeTilemap, settings } from "./libs/pixi-tilemap.es";
 import { GameSettings } from "./game-settings";
-import { positionToIndex } from "./misc-utility";
-import { RGBAColor } from "./light-manager";
 
 export enum Layer {
   TERRAIN = 1,
@@ -55,7 +51,9 @@ export class Renderer {
       layer.zIndex = 35;
     });
     this.smallActorLayer.zIndex = 85;
+    this.smallActorLayer.sortableChildren = true;
     this.actorLayer.zIndex = 65;
+    this.actorLayer.sortableChildren = true;
     this.uiLayer.zIndex = 10;
   }
 

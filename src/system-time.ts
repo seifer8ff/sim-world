@@ -1,4 +1,3 @@
-import { Game } from "./game";
 import Action from "rot-js/lib/scheduler/action";
 import { GameSettings } from "./game-settings";
 import { ActorBase } from "./actor";
@@ -40,14 +39,6 @@ export class SystemTime {
   public static remainingPhasePercent: number = 0;
 
   public static init(): void {
-    if (!GameSettings.options.toggles.dayStart) {
-      const temp = this.scheduler.add(null, false, this.dayLength);
-      for (let i = 0; i < this.dayLength; i++) {
-        this.scheduler.next();
-      }
-      this.scheduler.remove(temp);
-    }
-
     // Add single turn placeholder actor to ensure no turns are skipped
     this.scheduler.add({}, true, 1);
 

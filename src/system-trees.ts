@@ -61,6 +61,7 @@ export class SystemTrees {
       actorBase.sprite.position.x =
         pos.x * Tile.denseSize - Tile.denseSize - Tile.denseSize / 2;
       actorBase.sprite.position.y = pos.y * Tile.denseSize - Tile.denseSize + 1;
+      actorBase.sprite.zIndex = actorBase.position.y;
 
       if (species.id === "pine") {
         actorBase.fruitCount = 1;

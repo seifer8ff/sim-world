@@ -1,11 +1,9 @@
-import { RNG } from "rot-js";
 import { BiomeId, Biomes } from "./biomes";
 import { BrainAnimal } from "./brains/brain-animal";
 import { BrainCow } from "./brains/brain-cow";
 import { BrainFish } from "./brains/brain-fish";
 import { Description } from "./components/description";
 import { ActorBase, WithID, WithPosition } from "./actor";
-import { Species, SpeciesId } from "./species";
 import { Game } from "./game";
 import { GameSettings } from "./game-settings";
 import { generateId } from "./misc-utility";
@@ -55,7 +53,12 @@ export class GameSetup {
     this.spawnInitialPlants();
     this.spawnInitialAnimals();
     SystemTime.setIsPaused(false);
-    for (let i = 0; i < 20; i++) {
+    let skipTurns = SystemTime.dayLength;
+    if (GameSettings.options.toggles.dayStart) {
+      // also skip the first night if dayStart is enabled
+      skipTurns += SystemTime.nightLength;
+    }
+    for (let i = 0; i < skipTurns; i++) {
       this.game.gameLoop();
     }
     this.game.gameState.worldSetupComplete = true;

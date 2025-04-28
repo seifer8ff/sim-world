@@ -689,7 +689,7 @@ export class Camera {
       }
     }
 
-    this.game.map.onTileEnterViewport(enteredTiles);
+    this.game.map.onTileEnterViewport(this.viewportUnpadded, enteredTiles);
   }
 
   public uiUpdate(deltaTime: number) {
