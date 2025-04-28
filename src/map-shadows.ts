@@ -22,29 +22,7 @@ export enum SunDirection {
   Topdown,
 }
 
-// export const TempMap = {
-//   [SunLevels.Bright]: {
-//     min: 0.85,
-//     max: 1,
-//   },
-//   [SunLevels.Sunny]: {
-//     min: 0.65,
-//     max: 0.85,
-//   },
-//   [SunLevels.Clear]: {
-//     min: 0.4,
-//     max: 0.65,
-//   },
-//   [SunLevels.Overcast]: {
-//     min: 0.2,
-//     max: 0.4,
-//   },
-//   [SunLevels.Dark]: {
-//     min: 0,
-//     max: 0.2,
-//   },
-// };
-
+// Height values used for shadow casting calculations
 export const HeightDropoff = {
   Hole: 0.25,
   Valley: 0.5,
@@ -54,506 +32,606 @@ export const HeightDropoff = {
   HighHill: 1,
 };
 
-// export const HeightDropoff = {
-//   Hole: 0.01,
-//   Valley: 0.15,
-//   SeaLevel: 0.3,
-//   LowHill: 0.8,
-//   MidHill: 1.2,
-//   HighHill: 1.5,
-// };
-
-// TODO: ENTIRE CLASS NEEDS TO BE REWORKED
-// CALCULATE SHADOWS REGULARLY, RATHER THAN THE ENTIRE MAP AT ONCE
+/**
+ * Manages shadow calculations for the map.
+ * Shadows are calculated in real-time based on the sun angle and height differences.
+ */
 export class MapShadows {
   public camera: Camera;
   public lightManager: LightManager;
+
+  // Only store the current shadow values for visible tiles
   public shadowMap: number[];
-  public targetShadowMap: number[];
   public occlusionMap: number[];
-  public minShadowLength: number;
-  public maxShadowLength: number;
-  public shadowLength: number;
-  public shadowStrength: number;
+
+  // Shadow parameters
+  // these get updated as time passes
+  public shadowStrength: number; // current shadow strength based on time, etc
   public ambientOcclusionShadowStrength: number;
   public ambientLightStrength: number;
-  public sundownOffsetMap: [number, number][][];
-  public sunupOffsetMap: [number, number][][];
-  public sundownDropoffMap: Map<number, Map<number, number>>;
-  public sunupDropoffMap: Map<number, Map<number, number>>;
-  public topdownDropoffMap: Map<number, Map<number, number>>;
-  private oldShadowLength: number;
-  private oldPhase: DayPhase;
+
+  // base shadow strength
+  // these don't change
+  private maxShadowDistance: number; // maximum distance for ray tracing
+  private minShadowStrength: number; // minimum shadow strength. Used to calculate this.shadowStrength
+
+  // Sun positioning
+  private sunAngle: number; // in radians
+  private sunElevation: number; // 0 to 1
+  private shadowResolution: number; // step size for ray tracing
 
   constructor(private game: Game, private map: MapWorld) {
     this.shadowMap = [];
-    this.targetShadowMap = [];
     this.occlusionMap = [];
 
-    this.shadowStrength = 1;
+    this.minShadowStrength = 0.5; // Minimum shadow strength
+    // this.shadowStrength = 0.8; // starting point for shadows, will be updated immediately
     this.ambientOcclusionShadowStrength = 1;
-    this.minShadowLength = 0;
-    this.maxShadowLength = 5;
-    this.ambientLightStrength = 0.8;
-    this.shadowLength = GameSettings.options.maxShadowLength;
-    this.oldShadowLength = this.shadowLength;
-    this.oldPhase = SystemTime.lightPhase;
-    this.sunupOffsetMap = [];
-    this.sundownOffsetMap = [];
-    this.sundownDropoffMap = new Map();
-    this.sunupDropoffMap = new Map();
-    this.topdownDropoffMap = new Map();
-    for (let i = 0; i < GameSettings.options.maxShadowLength + 1; i++) {
-      // start with 0 instead of minShadowLength to account for special case shadow maps, like the topdown map
-      this.sundownDropoffMap.set(i, new Map());
-      this.sunupDropoffMap.set(i, new Map());
-      this.topdownDropoffMap.set(i, new Map());
-    }
+    this.ambientLightStrength = GameSettings.options.ambientLightStrength;
+
+    // Default values for shadow calculation
+    this.sunAngle = Math.PI / 4; // 45 degrees
+    this.sunElevation = 0.5;
+    this.shadowResolution = 1.0;
+    this.maxShadowDistance = GameSettings.options.maxShadowLength;
   }
 
   public init() {
     this.camera = this.game.userInterface.camera;
     this.shadowMap = [];
-    this.targetShadowMap = [];
     this.occlusionMap = [];
-    // only update the shadow map for the viewport tiles
-    const viewportTiles = this.game.userInterface.camera.viewportPadded.tiles;
-    for (let posIndex of viewportTiles) {
-      this.targetShadowMap[posIndex] = 1;
-      this.occlusionMap[posIndex] = 1;
-    }
-  }
 
-  public generateShadowMaps() {
-    // at each step/update
-    // orient the tiles according to angle * time of day
-    // as time of day goes on, angle decreases I think
-    // leading to a sun-like curve...hopefully
-    // calculate sunlight for each tile
-    // when moving from higher elevation to lower, decrease sunlight
-    // check adjacent-by-angle tiles, and if higher height, reduce brightness by step
-    // const sortedCoordMap = this.sortByHeight(this.map.biomeMap);
-
-    // this.sortedCoordMap = this.orientMapReverse(); // working properly
-    const tileIndexes = this.game.userInterface.camera.viewportPadded.tiles;
-    this.sunupOffsetMap = this.calcSunupMap();
-    this.sundownOffsetMap = this.calcSundownMap();
-    this.generateDropoffMaps();
-    this.updateOcclusionShadowMap(tileIndexes);
-    this.updateShadowMap(false, SunDirection.Sunup);
-    this.updateShadowMap(true, SunDirection.Sunup);
-    this.interpolateShadowState(
-      this.game.userInterface.camera.viewportUnpadded.tiles
-    );
-  }
-
-  public generateDropoffMaps() {
-    // const sorted = this.calcSunupMap();
-    // const reverseSorted = this.calcSundownMap();
-    const heightLayerAdjacencyMap = this.map.heightLayerAdjacencyD1Map;
-    for (let i = 0; i < this.sunupOffsetMap.length; i++) {
-      for (let j = 0; j < this.sunupOffsetMap[i].length; j++) {
-        const coords = this.sunupOffsetMap[i][j];
-        this.calcDropoff(
-          coords[0],
-          coords[1],
-          i,
-          j,
-          this.sunupOffsetMap,
-          SunDirection.Sunup
-        );
+    // init shadow map and occlusion map with default values
+    const mapWidth = GameSettings.options.gameSize.width;
+    const mapHeight = GameSettings.options.gameSize.height;
+    const mapSize = mapWidth * mapHeight;
+    let posIndex = 0;
+    for (let x = 0; x < mapWidth; x++) {
+      for (let y = 0; y < mapHeight; y++) {
+        posIndex = positionToIndex(x, y, Layer.TERRAIN);
+        this.shadowMap[posIndex] = this.ambientLightStrength;
+        this.occlusionMap[posIndex] = 1; // 1 means no occlusion
       }
     }
+    // this.shadowMap = new Array(mapSize).fill(0.5);
+    // this.occlusionMap = new Array(mapSize).fill(1); // 1 means no occlusion
 
-    for (let i = 0; i < this.sundownOffsetMap.length; i++) {
-      for (let j = 0; j < this.sundownOffsetMap[i].length; j++) {
-        const coords = this.sundownOffsetMap[i][j];
-        this.calcDropoff(
-          coords[0],
-          coords[1],
-          i,
-          j,
-          this.sundownOffsetMap,
-          SunDirection.Sundown
-        );
-      }
-    }
-
-    for (let i = 0; i < GameSettings.options.gameSize.width; i++) {
-      for (let j = 0; j < GameSettings.options.gameSize.height; j++) {
-        const adjacent = this.map.getAdjacent(i, j, heightLayerAdjacencyMap);
-        if (adjacent) {
-          this.calcTopDownDropoff(i, j, adjacent);
-        }
-      }
-    }
-  }
-
-  public updateOcclusionShadowMap(tileIndexes: number[]) {
-    let posIndex: number;
-    let posXY: [number, number];
-    for (let i = 0; i < tileIndexes.length; i++) {
-      posIndex = tileIndexes[i];
-      posXY = indexToXY(posIndex, Layer.TERRAIN);
-      this.occlusionMap[posIndex] = this.getCastShadowFor(
-        posXY[0],
-        posXY[1],
-        SunDirection.Topdown
-      );
-    }
-  }
-
-  public updateShadowMap(calculateTarget = true, dir: SunDirection) {
-    let mapToUpdate = [];
-    if (calculateTarget) {
-      mapToUpdate = this.targetShadowMap;
-    } else {
-      mapToUpdate = this.shadowMap;
-    }
-    const offsetMap =
-      dir === SunDirection.Sunup ? this.sunupOffsetMap : this.sundownOffsetMap; // only sunup and sundown maps need to be updated, as theyre dynamic
-    for (let i = 0; i < offsetMap.length; i++) {
-      for (let j = 0; j < offsetMap[i].length; j++) {
-        const coords = offsetMap[i][j];
-        const x = coords[0];
-        const y = coords[1];
-        if (
-          Camera.inViewport(x, y, Layer.TERRAIN, this.camera.viewportUnpadded)
-        ) {
-          mapToUpdate[positionToIndex(x, y, Layer.TERRAIN)] =
-            this.getCastShadowFor(x, y, dir);
-        }
-      }
-    }
-    // for (let i = 0; i < offsetMap.length; i++) {
-    //   for (let j = 0; j < offsetMap[i].length; j++) {
-    //     const coords = offsetMap[i][j];
-    //     const x = coords[0];
-    //     const y = coords[1];
-    //     mapToUpdate[positionToIndex(x, y, Layer.TERRAIN)] =
-    //       this.getCastShadowFor(x, y, dir);
-    //   }
+    // Initialize shadow and occlusion maps with default values
+    // const viewportTiles = this.game.userInterface.camera.viewportPadded.tiles;
+    // for (let posIndex of viewportTiles) {
+    //   this.shadowMap[posIndex] = this.ambientLightStrength;
+    //   this.occlusionMap[posIndex] = 1;
     // }
   }
 
+  /**
+   * Update sun position based on time of day
+   */
   public turnUpdate() {
     if (!GameSettings.options.toggles.enableShadows) return;
-    // shadow strength only changes when the time of day changes,
-    // which only changes after a turn is taken
-    this.interpolateStrength();
-    // shadow direction and length are discrete values, only update on turn change
-    this.updateShadowDirection();
-    this.updateShadowLength();
+
+    if (SystemTime.isDayTime) {
+      // Update sun angle based on time of day
+      this.updateSunPosition();
+    } else {
+      // Update moon position if needed (not implemented yet)
+      this.updateMoonPosition();
+    }
+
+    // Compute shadows for visible tiles
+    this.updateShadowMap();
   }
 
+  /**
+   * Update shadows during rendering (every frame)
+   */
   public renderUpdate(interpPercent: number) {
     if (!GameSettings.options.toggles.enableShadows) return;
-    // move towards targetShadowMap from shadowMap every frame
-    this.interpolateShadowState(
-      this.game.userInterface.camera.viewportPadded.tiles
+
+    // Only recalculate shadows when needed (e.g., camera moved)
+    const visibleTileIndexes =
+      this.game.userInterface.camera.viewportPadded.tiles;
+
+    // Possibly interpolate sun position for smooth transitions
+    // const smoothSunAngle = lerp(interpPercent, this.prevSunAngle, this.sunAngle);
+
+    // Compute real-time shadows for visible tiles
+    this.updateOcclusionShadowMap(visibleTileIndexes);
+  }
+
+  /**
+   * Updates the shadow map based on current sun position
+   */
+  private updateShadowMap() {
+    // return;
+    if (!GameSettings.options.toggles.enableShadows) return;
+
+    const viewportTiles = this.game.userInterface.camera.viewportPadded.tiles;
+
+    // Convert 1D height map to 2D for the shadow computation algorithm
+    const heightMap = this.createHeightMapForViewport();
+    if (!heightMap) return;
+
+    // Compute shadows using the ray-tracing algorithm
+    const shadowValues = this.computeShadows(
+      heightMap,
+      this.sunAngle,
+      this.maxShadowDistance,
+      this.shadowResolution
+    );
+
+    // Apply shadow values to the shadow map
+    for (let i = 0; i < viewportTiles.length; i++) {
+      const posIndex = viewportTiles[i];
+      const [x, y] = indexToXY(posIndex, Layer.TERRAIN);
+
+      // Apply shadow value from computation
+      // Convert to local viewport coordinates for accessing the shadowValues array
+      const localX = x - heightMap.viewportOffsetX;
+      const localY = y - heightMap.viewportOffsetY;
+
+      if (
+        localX >= 0 &&
+        localX < heightMap.width &&
+        localY >= 0 &&
+        localY < heightMap.height
+      ) {
+        // Map shadow value (0 or 1) to actual light value
+        const shadowValue = shadowValues[localY][localX];
+
+        // Calculate final shadow value - stronger shadows during morning/evening
+        // Adjust shadow strength based on time of day
+        const shadowIntensity =
+          this.sunElevation < 0.3
+            ? this.shadowStrength * 1.5 // Stronger shadows at low sun angles
+            : this.shadowStrength;
+
+        this.shadowMap[posIndex] =
+          shadowValue === 1
+            ? this.ambientLightStrength * (1 - shadowIntensity)
+            : this.ambientLightStrength;
+      }
+    }
+  }
+
+  /**
+   * Updates ambient occlusion map for visible tiles
+   */
+  public updateOcclusionShadowMap(tileIndexes: number[]) {
+    // return;
+    if (!GameSettings.options.toggles.enableShadows) return;
+
+    for (let i = 0; i < tileIndexes.length; i++) {
+      const posIndex = tileIndexes[i];
+      const [x, y] = indexToXY(posIndex, Layer.TERRAIN);
+
+      // Calculate ambient occlusion based on height differences with adjacent tiles
+      const heightLayer = this.map.heightLayerMap.get(posIndex);
+
+      // Get both immediate and extended neighbors for better occlusion
+      const adjacentD1 = this.map.getAdjacent(
+        x,
+        y,
+        this.map.heightLayerAdjacencyD1Map
+      );
+
+      const adjacentD2 = this.map.getAdjacent(
+        x,
+        y,
+        this.map.heightLayerAdjacencyD2Map
+      );
+
+      if (!adjacentD1 || adjacentD1.length === 0) continue;
+
+      // Calculate occlusion from immediate neighbors (stronger effect)
+      const occlusionFactorD1 = this.calculateOcclusionFactor(
+        heightLayer,
+        adjacentD1,
+        this.ambientOcclusionShadowStrength // Stronger occlusion effect for immediate neighbors
+      );
+
+      // Calculate occlusion from extended neighbors (subtler effect)
+      const occlusionFactorD2 =
+        adjacentD2 && adjacentD2.length > 0
+          ? this.calculateOcclusionFactor(
+              heightLayer,
+              adjacentD2,
+              this.ambientOcclusionShadowStrength / 2
+            )
+          : this.ambientOcclusionShadowStrength;
+
+      // Combine both occlusion factors, prioritizing the stronger effect
+      this.occlusionMap[posIndex] = Math.min(
+        occlusionFactorD1,
+        occlusionFactorD2 + 0.2
+      );
+    }
+  }
+
+  /**
+   * Calculates shadow occlusion factor based on height differences with adjacent tiles
+   */
+  private calculateOcclusionFactor(
+    heightLayer: HeightLayer,
+    adjacentLayers: HeightLayer[],
+    strength: number = this.ambientOcclusionShadowStrength
+  ): number {
+    let occlusionFactor = 1.0; // No occlusion by default
+    let surroundingHigherTilesCount = 0;
+
+    for (const adjacentLayer of adjacentLayers) {
+      if (!adjacentLayer) continue;
+
+      const heightDiff =
+        HeightDropoff[adjacentLayer] - HeightDropoff[heightLayer];
+      if (heightDiff > 0) {
+        // Higher adjacent terrain causes occlusion
+        surroundingHigherTilesCount++;
+
+        // Stronger occlusion with greater height differences
+        const layerOcclusion = 1 - heightDiff * strength;
+        occlusionFactor = Math.min(occlusionFactor, layerOcclusion);
+      }
+    }
+
+    // Apply additional occlusion when surrounded by multiple higher tiles (valley effect)
+    if (surroundingHigherTilesCount > 2) {
+      occlusionFactor *= 1 - (surroundingHigherTilesCount - 2) * 0.05;
+    }
+
+    return Math.max(occlusionFactor, 0.15); // Ensure minimum ambient light
+  }
+
+  /**
+   * Creates a 2D height map for the current viewport for shadow computation
+   */
+  private createHeightMapForViewport() {
+    const viewportBounds = this.camera?.viewportPadded;
+    if (!viewportBounds) return;
+    // Calculate startX and startY from the center and dimensions
+    const startX =
+      viewportBounds.center.x - Math.floor(viewportBounds.width / 2);
+    const startY =
+      viewportBounds.center.y - Math.floor(viewportBounds.height / 2);
+    const width = viewportBounds.width;
+    const height = viewportBounds.height;
+
+    // Create a 2D array for the height map
+    const heightMap = Array(height)
+      .fill(0)
+      .map(() => Array(width).fill(0));
+
+    // Fill the height map with terrain height values
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const worldX = startX + x;
+        const worldY = startY + y;
+        const posIndex = positionToIndex(worldX, worldY, Layer.TERRAIN);
+
+        // Get height value for this position
+        let heightValue = 0;
+        const heightLayer = this.map.heightLayerMap.get(posIndex);
+        if (heightLayer) {
+          heightValue = HeightDropoff[heightLayer];
+        } else {
+          // Use raw height value as fallback
+          heightValue = this.map.heightMap.get(posIndex) || 0;
+        }
+
+        heightMap[y][x] = heightValue;
+      }
+    }
+
+    // Return the height map with metadata
+    return {
+      data: heightMap,
+      width,
+      height,
+      viewportOffsetX: startX,
+      viewportOffsetY: startY,
+    };
+  }
+
+  /**
+   * Updates sun position based on time of day and season
+   */
+  private updateSunPosition() {
+    // Get time parameters
+    const dayLength = SystemTime.dayLength;
+    const nightLength = SystemTime.nightLength;
+    const currentTime = SystemTime.currentTime;
+    const isDaytime = SystemTime.isDayTime;
+    const lightPhase = SystemTime.lightPhase;
+    const totalDayLength = dayLength + nightLength;
+
+    // Calculate day/night cycle progress
+    const daytimeProgress = currentTime / dayLength; // 0 to 1 during day\
+
+    // DAY TIME - SUN POSITION
+
+    // Calculate sun elevation using smoothed sine curve
+    // Sun: highest at noon (daytime progress = 0.5)
+    this.sunElevation = Math.max(0.05, Math.sin(Math.PI * daytimeProgress));
+
+    // Calculate sun angle for COUNTERCLOCKWISE motion
+    // Complete 180-degree cycle during day where:
+    // - Dawn: sun angle = 0 or 2π (0° or 360°) [East]
+    // - Noon: sun angle = π/2 (90°) [North]
+    // - Dusk: sun angle = π (180°) [West]
+    this.sunAngle = Math.PI * daytimeProgress;
+
+    this.applyShadowEnhancement(lightPhase);
+
+    // Calculate shadow length based on celestial elevation
+    this.calculateShadowProperties();
+
+    // Log celestial position details for debugging
+    console.log(
+      `sun: time=${currentTime}/${totalDayLength}, progress=${
+        isDaytime
+          ? daytimeProgress.toFixed(2)
+          : ((currentTime - dayLength) / nightLength).toFixed(2)
+      }, ` +
+        `angle=${((this.sunAngle * 180) / Math.PI).toFixed(1)}°, ` +
+        `elevation=${this.sunElevation.toFixed(2)}, ` +
+        `shadowDist=${this.maxShadowDistance.toFixed(1)}, ` +
+        `strength=${this.shadowStrength.toFixed(2)}` +
+        (lightPhase === DayPhase.evening ? " [EVENING]" : "")
     );
   }
 
-  private updateShadowDirection() {
-    if (this.oldPhase !== SystemTime.lightPhase) {
-      // switch direction of shadows on phase changes
-      this.oldPhase = SystemTime.lightPhase;
-      this.updateShadowMap(true, this.getShadowDir());
-    }
+  /**
+   * Updates moon position during nighttime
+   */
+  private updateMoonPosition() {
+    const nightLength = SystemTime.nightLength;
+    const currentTime = SystemTime.currentTime;
+    const dayLength = SystemTime.dayLength;
+    const totalDayLength = dayLength + nightLength;
+
+    // Calculate nighttime progress (0 at dusk, 1 at dawn)
+    const nightProgress = (currentTime - dayLength) / nightLength;
+
+    // Calculate moon elevation using smoothed sine curve
+    // Moon: highest at midnight (night progress = 0.5)
+    this.sunElevation = Math.max(0.05, Math.sin(Math.PI * nightProgress));
+
+    // Calculate moon angle for COUNTERCLOCKWISE motion continuing from sunset
+    // Complete 180-degree cycle during night where:
+    // - Dusk: moon angle = π (180°) [West] (continuing from sun's position)
+    // - Midnight: moon angle = 3π/2 (270°) [South]
+    // - Dawn: moon angle = 0 or 2π (0° or 360°) [East] (ready for sun to appear)
+    // this.sunAngle = Math.PI + Math.PI * nightProgress;
+    this.sunAngle = Math.PI * nightProgress;
+    console.log(
+      `moon: time=${currentTime}/${totalDayLength}, progress=${(
+        (currentTime - dayLength) /
+        nightLength
+      ).toFixed(2)}, ` +
+        `angle=${((this.sunAngle * 180) / Math.PI).toFixed(1)}°, ` +
+        `elevation=${this.sunElevation.toFixed(2)}, ` +
+        `shadowDist=${this.maxShadowDistance.toFixed(1)}, ` +
+        `strength=${this.shadowStrength.toFixed(2)}`
+    );
   }
 
-  private updateShadowLength() {
-    if (this.oldShadowLength !== this.shadowLength) {
-      this.oldShadowLength = this.shadowLength;
-      // change length of shadow map when shadowLength changes
-      this.updateShadowMap(true, this.getShadowDir());
-    }
-  }
+  /**
+   * Apply shadow enhancement for specific day phases
+   * This function adjusts the sun's elevation based on the time of day
+   * to create more dramatic and realistic shadow effects.
+   */
+  private applyShadowEnhancement(lightPhase: DayPhase) {
+    // Special handling for evening shadows
+    if (lightPhase === DayPhase.evening) {
+      // Control parameters for the evening shadow transition
+      const transitionSpeed = 2.0; // Higher values make the transition happen faster
+      const initialShadowBoost = 0.0; // Starting boost at the beginning of evening phase
 
-  private getShadowDir(): SunDirection {
-    return SystemTime.lightPhase === DayPhase.morning ||
-      SystemTime.lightPhase === DayPhase.mid
-      ? SunDirection.Sunup
-      : SunDirection.Sundown;
-  }
+      // Calculate how far we are through the evening phase (0 to 1)
+      const eveningProgress = 1 - SystemTime.remainingPhasePercent;
 
-  private interpolateStrength() {
-    // shadows change length and strength by time to light transition rather than deltaTime
-    const lightTransitionPercent = SystemTime.lightTransitionPercent;
-    const remainingCyclePercent = SystemTime.remainingCyclePercent;
-    const phase = SystemTime.lightPhase;
-
-    let remainingLightTransitionPercent;
-    let shadowStrength = this.shadowStrength;
-    let ambientShadowStrength = this.ambientOcclusionShadowStrength;
-    if (phase === DayPhase.morning) {
-      remainingLightTransitionPercent =
-        (1 - remainingCyclePercent) / lightTransitionPercent;
-      this.shadowLength = Math.round(
-        lerp(
-          remainingLightTransitionPercent,
-          GameSettings.options.maxShadowLength,
-          GameSettings.options.minShadowLength
-        )
+      // Create accelerating transition effect that starts slow and speeds up
+      // This uses a power function to create a non-linear progression
+      // The result ranges from initialShadowBoost (at start) to ~1.0 (at end)
+      const quickTransition = Math.min(
+        1.0,
+        Math.pow(eveningProgress * transitionSpeed, 2) + initialShadowBoost
       );
-      shadowStrength = lerp(remainingLightTransitionPercent, 0, 0.8);
-      ambientShadowStrength = lerp(remainingLightTransitionPercent, 1, 0.3);
-    } else if (phase === DayPhase.evening) {
-      remainingLightTransitionPercent =
-        remainingCyclePercent / lightTransitionPercent;
-      this.shadowLength = Math.round(
-        lerp(
-          remainingLightTransitionPercent,
-          GameSettings.options.maxShadowLength,
-          GameSettings.options.minShadowLength
-        )
+
+      // Artificially lower the sun's elevation during evening to create longer shadows
+      // This simulates the real-world phenomenon of longer shadows at sunset
+      const minElevation = 0.05; // Prevent the sun from going completely flat
+      const originalElevation = this.sunElevation; // Store original calculated elevation
+
+      // Reduce the sun's elevation proportionally to the evening's progression
+      // The 0.8 factor controls how much to lower the sun (80% max reduction)
+      this.sunElevation = Math.max(
+        minElevation,
+        originalElevation * (1 - quickTransition * 0.8)
       );
-      shadowStrength = lerp(remainingLightTransitionPercent, 0, 0.8);
-      ambientShadowStrength = lerp(remainingLightTransitionPercent, 1, 0.3);
     }
-    this.ambientOcclusionShadowStrength =
-      Math.round(ambientShadowStrength * 1000) / 1000;
-    this.shadowStrength = Math.round(shadowStrength * 1000) / 1000;
+
+    // Could add similar enhancements for other phases as needed
   }
 
-  public interpolateShadowState(tileIndexes: number[]) {
-    // smoothly transition between shadowMap and targetShadowMap over time
-    let val: number;
-    const progress = SystemTime.turnAnimTimePercent;
-    let index: number;
-    for (let i = 0; i < tileIndexes.length; i++) {
-      index = tileIndexes[i];
-      val = lerp(progress, this.shadowMap[index], this.targetShadowMap[index]);
-      this.shadowMap[index] = val;
+  /**
+   * Calculate shadow properties based on current celestial state
+   */
+  private calculateShadowProperties() {
+    // --- Shadow Length Calculation ---
+    const baseShadowLength = 4;
+    const shadowLengthMultiplier = 2;
+
+    // Calculate elevation factor - determines shadow length
+    let elevationFactor = 1 - this.sunElevation;
+
+    // Calculate shadow distance
+    this.maxShadowDistance =
+      baseShadowLength +
+      elevationFactor * shadowLengthMultiplier * baseShadowLength;
+
+    // Limit shadow length to reasonable bounds
+    this.maxShadowDistance = Math.max(3, Math.min(8, this.maxShadowDistance));
+
+    if (!SystemTime.isDayTime) {
+      this.maxShadowDistance = Math.max(
+        1,
+        Math.floor(this.maxShadowDistance * 0.5)
+      ); // Reduce length at night
     }
+
+    // --- Shadow Strength Calculation ---
+    // Strength varies inversely with sun elevation
+    let strengthFactor = 1 - this.sunElevation;
+
+    // Apply smooth easing to strength factor
+    const smoothStrengthFactor =
+      strengthFactor * strengthFactor * (3 - 2 * strengthFactor);
+    this.shadowStrength = this.minShadowStrength + smoothStrengthFactor * 0.35;
+
+    if (!SystemTime.isDayTime) {
+      // Moon shadows are typically more subtle
+      this.shadowStrength *= 0.6; // Reduce strength at night
+    }
+
+    // Adjust resolution for shadow calculation
+    this.shadowResolution = 0.8 + this.maxShadowDistance / 20;
   }
 
-  // private sortMap(
-  //   map: { [key: string]: Biome },
-  //   vector: Point = new Point(1, 1)
-  // ): string[] {
-  //   const rows = GameSettings.options.gameSize.height;
-  //   const columns = GameSettings.options.gameSize.width;
-  //   const total = columns + rows - 1;
-  //   const result = [];
+  /**
+   * Compute shadow map using ray casting
+   * @param heightMapData 2D array of height values
+   * @param lightAngle Direction of light in radians
+   * @param maxDistance Maximum distance to cast rays
+   * @param resolution Step size for ray casting
+   * @returns 2D array of shadow values (1=shadowed, 0=lit)
+   */
+  private computeShadows(
+    heightMapData: { data: number[][]; width: number; height: number },
+    lightAngle: number,
+    maxDistance: number,
+    resolution: number
+  ): number[][] {
+    const { data: heightMap, width, height } = heightMapData;
+    const shadowMap: number[][] = Array(height)
+      .fill(0)
+      .map(() => Array(width).fill(0));
 
-  //   // sort by scalar product of vector
-  //   const sorted = Object.keys(map).sort((a, b) => {
-  //     const pointA = MapWorld.keyToPoint(a);
-  //     const pointB = MapWorld.keyToPoint(b);
-  //     const scalarA = pointA.x * vector.x + pointA.y * vector.y;
-  //     const scalarB = pointB.x * vector.x + pointB.y * vector.y;
-  //     return scalarA - scalarB;
-  //   });
-  //   return sorted;
-  // }
+    // Direction vectors - For a standard 2D coordinate system where +y is down on screen:
+    // With counterclockwise sun motion:
+    // Morning (180°/east): dx=-1, dy=0 → shadows cast to right (-dx, same dy)
+    // Noon (90°/north): dx=0, dy=-1 → shadows cast downward (same dx, -dy)
+    // Evening (0° or 360°/west): dx=1, dy=0 → shadows cast to left (-dx, same dy)
+    const dx = Math.cos(lightAngle);
+    const dy = Math.sin(lightAngle);
 
-  private calcSundownMap(): [number, number][][] {
-    const rows = GameSettings.options.gameSize.height;
-    const columns = GameSettings.options.gameSize.width;
-    const result = [];
+    // For shadow rays, we cast in the opposite direction from the light source
+    const shadowDx = -dx;
+    const shadowDy = -dy;
 
-    for (let i = 0; i < rows; i++) {
-      for (let j = 0; j < columns; j++) {
-        const el = [j, i];
-        const pos = j + rows - i - 1;
+    // Debugging
+    console.log(
+      `Sun angle: ${((lightAngle * 180) / Math.PI).toFixed(1)}°, ` +
+        `Light direction: dx=${dx.toFixed(2)}, dy=${dy.toFixed(2)}, ` +
+        `Shadow direction: dx=${shadowDx.toFixed(2)}, dy=${shadowDy.toFixed(2)}`
+    );
 
-        if (!result[pos]) {
-          result[pos] = [];
+    // Set shadow detection parameters
+    const baseThreshold = 0.02;
+    const thresholdRange = 0.06;
+
+    // Scale threshold with sun elevation
+    const slopeThreshold = Math.min(
+      baseThreshold + thresholdRange * this.sunElevation,
+      0.06
+    );
+
+    // Track how many height differences were encountered for debugging
+    let heightDiffsCount = 0;
+
+    // Compute shadows for each position
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const h0 = heightMap[y][x];
+        let shadowed = false;
+        let distance = resolution;
+
+        // Cast rays OPPOSITE to the light source direction (toward where shadows should go)
+        while (distance < maxDistance) {
+          // Calculate position along ray
+          const rx = Math.floor(x + shadowDx * distance);
+          const ry = Math.floor(y + shadowDy * distance);
+
+          // Check if we're still in bounds
+          if (rx < 0 || ry < 0 || rx >= width || ry >= height) break;
+
+          const h1 = heightMap[ry][rx];
+
+          // Check if there's higher terrain along the ray path
+          if (h1 > h0) {
+            heightDiffsCount++;
+
+            // Calculate slope from current point to the blocking terrain
+            const heightDiff = h1 - h0;
+            const slope = heightDiff / distance;
+
+            // If the slope exceeds our threshold, we're in shadow
+            if (slope > slopeThreshold) {
+              shadowed = true;
+              break;
+            }
+          }
+
+          distance += resolution;
         }
 
-        result[pos].unshift(el);
+        // Store shadow result (1 = shadowed, 0 = lit)
+        shadowMap[y][x] = shadowed ? 1 : 0;
       }
     }
 
-    return result;
+    // Count and log the number of shadowed tiles for debugging
+    const shadowedCount = shadowMap.flat().filter((v) => v === 1).length;
+    console.log(
+      `Found ${heightDiffsCount} height differences resulting in ${shadowedCount} shadowed tiles (${(
+        (shadowedCount * 100) /
+        (width * height)
+      ).toFixed(1)}%)`
+    );
+
+    return shadowMap;
   }
 
-  private calcSunupMap(): [number, number][][] {
-    const rows = GameSettings.options.gameSize.height;
-    const columns = GameSettings.options.gameSize.width;
-    const result = [];
-
-    for (let i = rows; i >= 0; i--) {
-      for (let j = 0; j < columns; j++) {
-        const el = [i, j];
-        const pos = i + j;
-
-        if (!result[pos]) {
-          result[pos] = [];
-        }
-
-        result[pos].unshift(el);
-      }
-    }
-
-    return result;
-  }
-
-  private getHeightDropoff(
-    currentHeight: HeightLayer,
-    previousHeight: HeightLayer
-  ): number {
-    let dropoff = HeightDropoff[previousHeight] - HeightDropoff[currentHeight];
-    if (dropoff > 0) {
-      dropoff = 1 - dropoff;
-      // since this is used to represent light later, we want to measure the drop between ambient light and 0 light
-      dropoff = lerp(GameSettings.options.ambientLightStrength, 0, dropoff);
-      return Math.round(dropoff * 1000) / 1000;
-    }
-    return 0;
-  }
-
-  private getOcclusionHeightDropoff(
-    currentHeight: HeightLayer,
-    previousHeight: HeightLayer
-  ): number {
-    // occlusion dropoff doesn't care about the ambient light strength limit.
-    // will be used to lerp between two colors later
-    let dropoff = HeightDropoff[previousHeight] - HeightDropoff[currentHeight];
-    if (dropoff > 0) {
-      dropoff = 1 - dropoff;
-      return Math.round(dropoff * 1000) / 1000;
-    }
-    return 1;
-  }
-
-  public calcDropoff(
-    x: number,
-    y: number,
-    row: number,
-    index: number,
-    coordMap: [number, number][][],
-    mapKey: SunDirection
-  ): number {
-    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
-    const heightLevel = this.map.heightLayerMap.get(posIndex);
-
-    let lastPosIndex = -1;
-    let lastPos = [];
-    let lastRow: [number, number][];
-    let lastHeightLevel: HeightLayer;
-    let dropoff = 0;
-
-    for (
-      let i = GameSettings.options.minShadowLength;
-      i < GameSettings.options.maxShadowLength + 1;
-      i++
-    ) {
-      lastRow = coordMap[row - i];
-      const lastIndex = index - i;
-      if (!lastRow || lastIndex < 0) {
-        lastHeightLevel = heightLevel;
-      } else {
-        lastPos = lastRow[lastIndex];
-        lastPosIndex = positionToIndex(lastPos[0], lastPos[1], Layer.TERRAIN);
-        lastHeightLevel = lastRow
-          ? this.map.heightLayerMap.get(lastPosIndex)
-          : heightLevel;
-      }
-
-      dropoff = this.getHeightDropoff(heightLevel, lastHeightLevel);
-      switch (mapKey) {
-        case SunDirection.Sunup:
-          if (this.sunupDropoffMap.get(i) === undefined) {
-            this.sunupDropoffMap.set(i, new Map());
-          }
-          this.sunupDropoffMap.get(i).set(posIndex, dropoff);
-          break;
-        case SunDirection.Sundown:
-          if (this.sundownDropoffMap.get(i) === undefined) {
-            this.sundownDropoffMap.set(i, new Map());
-          }
-          this.sundownDropoffMap.get(i).set(posIndex, dropoff);
-          break;
-        case SunDirection.Topdown:
-          if (this.topdownDropoffMap.get(i) === undefined) {
-            this.topdownDropoffMap.set(i, new Map());
-          }
-          this.topdownDropoffMap.get(i).set(posIndex, dropoff);
-          break;
-      }
-    }
-
-    return dropoff;
-  }
-
-  public calcTopDownDropoff(
-    x: number,
-    y: number,
-    adjacent: HeightLayer[]
-  ): number {
-    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
-    const heightLevel = this.map.heightLayerMap.get(posIndex);
-    let dropoff = 0;
-    for (let i = 0; i < adjacent.length; i++) {
-      const adjacentHeightLayer = adjacent[i];
-      const currentDropoff = this.getOcclusionHeightDropoff(
-        heightLevel,
-        adjacentHeightLayer
-      );
-      if (currentDropoff > 0) {
-        if (dropoff === 0) {
-          dropoff = currentDropoff;
-        } else {
-          dropoff *= currentDropoff;
-        }
-      }
-    }
-    dropoff = Math.round(dropoff * 1000) / 1000;
-    this.topdownDropoffMap.get(1).set(posIndex, dropoff);
-
-    return dropoff;
-  }
-
-  private getCastShadowFor(x: number, y: number, dir: SunDirection): number {
-    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
-    // if dir is topdown (sun overhead), use the topdown shadow map, aka shadowLength of 1
-    let map;
-    switch (dir) {
-      case SunDirection.Sunup:
-        map = this.sunupDropoffMap.get(this.shadowLength);
-        break;
-      case SunDirection.Sundown:
-        map = this.sundownDropoffMap.get(this.shadowLength);
-        break;
-      case SunDirection.Topdown:
-        map = this.topdownDropoffMap.get(1);
-        break;
-    }
-    if (!map) {
-      console.log("no map", this.shadowLength, dir, x, y, posIndex);
-      return 0;
-    }
-    // if there is no dropoff, this tile gets full sun
-    const sunlight =
-      map.get(posIndex) || GameSettings.options.ambientLightStrength;
-
-    return sunlight;
-  }
-
+  /**
+   * Get shadow value for a specific position
+   */
   get(x: number, y: number): number {
-    return this.shadowMap[positionToIndex(x, y, Layer.TERRAIN)];
+    return (
+      this.shadowMap[positionToIndex(x, y, Layer.TERRAIN)] ||
+      this.ambientLightStrength
+    );
   }
 
+  /**
+   * Set shadow value for a specific position
+   */
   set(x: number, y: number, sunlightAmount: number): void {
     this.shadowMap[positionToIndex(x, y, Layer.TERRAIN)] = sunlightAmount;
   }
 
+  /**
+   * Handle when tiles enter the viewport.
+   * Important when game is paused, as shadows are updated after turns.
+   */
   public onEnter(indexes: number[]): void {
-    if (!GameSettings.options.toggles.enableShadows) {
-      return;
-    }
-    // occlusion maps are static, so just update it on enter
+    if (!GameSettings.options.toggles.enableShadows) return;
+
+    // Update the occlusion map for the new tiles
     this.updateOcclusionShadowMap(indexes);
-    // immediately update the shadow map when a tile enters the viewport
-    const dir = this.getShadowDir();
-    let xy: [number, number];
-    for (let index of indexes) {
-      xy = indexToXY(index, Layer.TERRAIN);
-      const lvl = this.getCastShadowFor(xy[0], xy[1], dir);
-      this.targetShadowMap[index] = lvl;
-      this.shadowMap[index] = lvl;
-    }
+
+    // Calculate shadows for the new tiles
+    const visibleTileIndexes =
+      this.game.userInterface.camera.viewportPadded.tiles;
+    this.updateShadowMap();
   }
 }

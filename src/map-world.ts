@@ -285,7 +285,8 @@ export class MapWorld {
     // console.log("cloudMap", this.cloudMap.cloudMap);
     // console.log("moistureMap", this.moistureMap.moistureMap);
     if (GameSettings.options.toggles.enableShadows) {
-      this.shadowMap.generateShadowMaps();
+      this.shadowMap.init(); // Initialize the shadows with the new real-time approach
+      this.shadowMap.turnUpdate(); // Update the shadow map for the current sun position
     }
 
     // finally, generate the tile map

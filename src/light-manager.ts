@@ -555,7 +555,8 @@ export class LightManager {
           (1 - occlusionMap) * ambOccShadowStrength
         );
       }
-      if (isShadowed && isDaytime) {
+      if (isShadowed) {
+        // if (isShadowed && isDaytime) {
         light = Color.interpolate(
           light,
           shadow,
