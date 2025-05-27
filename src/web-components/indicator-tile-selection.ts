@@ -80,7 +80,7 @@ export class IndicatorTileSelection extends HTMLElement {
 
   private drawGrid() {
     if (this.canvas) {
-      const ctx = this.canvas.getContext("2d");
+      const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
       // fill the grid with 16x16 tiles with a 1px border
       const borderSize = 1;
       const scale = this.game.userInterface.application.stage.scale.x;

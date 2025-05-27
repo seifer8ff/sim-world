@@ -89,6 +89,8 @@ import { Game } from "./game";
 import { calculateMidpointScore, positionToIndex } from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { Tile } from "./tile";
+import { SystemMoisture } from "./system-moisture";
+import { SystemTemperature } from "./system-temperature";
 
 const recolorShader = `
   precision mediump float;
@@ -208,8 +210,8 @@ export class Species {
     );
     const height = map.heightMap.get(terrainIndex) * 100; // height in percent (0-100)
     const light = 50; // not integrated with light manager yet...needs work
-    const moisture = map.moistureMap.getMoistureByIndex(terrainIndex) * 100;
-    const temperature = map.tempMap.getTempByIndex(terrainIndex) * 100;
+    const moisture = SystemMoisture.getByIndex(terrainIndex) * 100;
+    const temperature = SystemTemperature.getByIndex(terrainIndex) * 100;
 
     return (
       needs.height.min <= height &&
@@ -238,8 +240,8 @@ export class Species {
     );
     const height = map.heightMap.get(terrainIndex) * 100; // height in percent (0-100)
     const light = 50; // not integrated with light manager yet...needs work
-    const moisture = map.moistureMap.getMoistureByIndex(terrainIndex) * 100;
-    const temperature = map.tempMap.getTempByIndex(terrainIndex) * 100;
+    const moisture = SystemMoisture.getByIndex(terrainIndex) * 100;
+    const temperature = SystemTemperature.getByIndex(terrainIndex) * 100;
     // return a number between 0 and 1 representing how well the position meets the needs
     const heightScore = calculateMidpointScore(
       height,
@@ -285,8 +287,8 @@ export class Species {
     );
     const height = map.heightMap.get(terrainIndex) * 100; // height in percent (0-100)
     const light = 50; // not integrated with light manager yet...needs work
-    const moisture = map.moistureMap.getMoistureByIndex(terrainIndex) * 100;
-    const temperature = map.tempMap.getTempByIndex(terrainIndex) * 100;
+    const moisture = SystemMoisture.getByIndex(terrainIndex) * 100;
+    const temperature = SystemTemperature.getByIndex(terrainIndex) * 100;
 
     // filter all species by their needs and the position
     return Object.values(Species.allSpecies).filter((species) => {

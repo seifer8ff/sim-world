@@ -7,7 +7,7 @@ export class SystemSunMoon {
   // Sun positioning
   public static angle = Math.PI / 4; // 45 degrees
   public static elevation: number = 0.5; // 0 to 1
-  private static logging: boolean = true; // Enable logging for debugging
+  private static logging: boolean = false; // Enable logging for debugging
 
   /**
    * Update sun/moon position based on time of day

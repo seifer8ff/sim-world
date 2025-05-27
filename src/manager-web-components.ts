@@ -24,6 +24,11 @@ import { serialize } from "@shoelace-style/shoelace";
 import { ActorBase } from "./actor";
 import { SystemStatic } from "./system-static";
 import { SystemTime } from "./system-time";
+import { SystemMoisture } from "./system-moisture";
+import { SystemTemperature } from "./system-temperature";
+import { SystemPoles } from "./system-poles";
+import { positionToIndex } from "./misc-utility";
+import { Layer } from "./renderer";
 
 export class ManagerWebComponents {
   private timeControl: TimeControl;
@@ -37,7 +42,7 @@ export class ManagerWebComponents {
 
   constructor(private game: Game, private ui: UserInterface) {
     this.initWebComponents();
-    this.initControls();
+    this.initRequiredControls();
   }
 
   public refreshComponents() {
@@ -48,13 +53,15 @@ export class ManagerWebComponents {
     if (this.game.gameState.stage === Stages.Play) {
       if (this.ui.camera.pointerTarget) {
         // refresh the target info data obj
-        this.game.userInterface.camera.refreshPointerTargetInfo();
+        this.ui.camera.refreshPointerTargetInfo();
         // refresh the tile info UI with the new data
-        this.tileInfo.refreshContent(
-          this.game.userInterface.camera.pointerTarget
-        );
+        this.tileInfo.setContent(this.ui.camera.pointerTarget);
       }
     }
+  }
+
+  public init(): void {
+    this.initSecondaryControls();
   }
 
   private initWebComponents() {
@@ -70,7 +77,64 @@ export class ManagerWebComponents {
     customElements.define("indicator-tile-selection", IndicatorTileSelection);
   }
 
-  private initControls() {
+  private initSecondaryControls(): void {
+    this.timeControl = document.querySelector("time-control");
+    if (this.timeControl) {
+      this.timeControl.init();
+      // this.timeControl.toggleTooltip();
+      this.timeControl.updateTime(SystemTime.getCurrentTimeForDisplay());
+      this.timeControl.pauseBtn.addEventListener("click", () => {
+        SystemTime.togglePause();
+      });
+      this.timeControl.timeSlider.addEventListener("sl-input", (e: any) => {
+        SystemTime.setTimescale(e.target.value);
+        console.log("time scale: ", SystemTime.timeScale);
+      });
+    }
+
+    this.sideMenu = document.querySelector("side-menu");
+    if (this.sideMenu) {
+      this.sideMenu.dropdownMenu.addEventListener(
+        "sl-select",
+        (e: CustomEvent) => {
+          console.log(e.detail);
+          this.sideMenu.setSelectedTab(this.sideMenu.getTab(e.detail.item.id));
+        }
+      );
+
+      this.sideMenu.handle.addEventListener("click", () => {
+        this.sideMenu.setCollapsed(!this.sideMenu.isCollapsed);
+      });
+    }
+    this.tileInfo = document.querySelector("tile-info");
+    this.tileInfo.game = this.game;
+    this.skyMask = document.querySelector("sky-mask");
+    this.overlay = document.querySelector("screen-overlay");
+    if (this.overlay) {
+      this.overlay.closeBtn.addEventListener("click", () => {
+        this.overlay.setVisible(false);
+        this.setUIVisible(true, true);
+      });
+      this.registerOverlays();
+    }
+    this.tileSelectionIndicator = document.querySelector(
+      "indicator-tile-selection"
+    );
+    if (this.tileSelectionIndicator) {
+      this.tileSelectionIndicator.init(this.game);
+      this.tileSelectionIndicator.closeBtn.addEventListener("click", () => {
+        this.tileSelectionIndicator.setVisible(false);
+        this.setUIVisible(true, true);
+      });
+    }
+    this.ui.initializeBuildTools();
+    if (this.timeControl) {
+      this.utilityActions = this.timeControl.utilityActions;
+      this.setUtilityActionsOptions();
+    }
+  }
+
+  private initRequiredControls() {
     this.titleMenu = document.querySelector("title-menu");
     if (this.titleMenu) {
       this.titleMenu.handle.addEventListener("click", () => {
@@ -142,58 +206,6 @@ export class ManagerWebComponents {
         return false;
       });
     }
-    this.timeControl = document.querySelector("time-control");
-    if (this.timeControl) {
-      // this.timeControl.toggleTooltip();
-      this.timeControl.updateTime(SystemTime.getCurrentTimeForDisplay());
-      this.timeControl.pauseBtn.addEventListener("click", () => {
-        SystemTime.togglePause();
-      });
-      this.timeControl.timeSlider.addEventListener("sl-input", (e: any) => {
-        SystemTime.setTimescale(e.target.value);
-        console.log("time scale: ", SystemTime.timeScale);
-      });
-    }
-
-    this.sideMenu = document.querySelector("side-menu");
-    if (this.sideMenu) {
-      this.sideMenu.dropdownMenu.addEventListener(
-        "sl-select",
-        (e: CustomEvent) => {
-          console.log(e.detail);
-          this.sideMenu.setSelectedTab(this.sideMenu.getTab(e.detail.item.id));
-        }
-      );
-
-      this.sideMenu.handle.addEventListener("click", () => {
-        this.sideMenu.setCollapsed(!this.sideMenu.isCollapsed);
-      });
-    }
-    this.tileInfo = document.querySelector("tile-info");
-    this.tileInfo.game = this.game;
-    this.skyMask = document.querySelector("sky-mask");
-    this.overlay = document.querySelector("screen-overlay");
-    if (this.overlay) {
-      this.overlay.closeBtn.addEventListener("click", () => {
-        this.overlay.setVisible(false);
-        this.setUIVisible(true, true);
-      });
-      this.registerOverlays();
-    }
-    this.tileSelectionIndicator = document.querySelector(
-      "indicator-tile-selection"
-    );
-    if (this.tileSelectionIndicator) {
-      this.tileSelectionIndicator.init(this.game);
-      this.tileSelectionIndicator.closeBtn.addEventListener("click", () => {
-        this.tileSelectionIndicator.setVisible(false);
-        this.setUIVisible(true, true);
-      });
-    }
-    if (this.timeControl) {
-      this.utilityActions = this.timeControl.utilityActions;
-      this.setUtilityActionsOptions();
-    }
   }
 
   public updateTimeControl(): void {
@@ -207,10 +219,10 @@ export class ManagerWebComponents {
     if (this.game.gameState.isLoading()) {
       if (this.game.gameState.stage === Stages.Title) {
         this.titleMenu.setCollapsed(false);
-        this.sideMenu.setVisible(false, true);
-        this.timeControl.setVisible(false);
+        this.sideMenu?.setVisible(false, true);
+        this.timeControl?.setVisible(false);
       } else if (this.game.gameState.stage === Stages.Play) {
-        this.titleMenu.setCollapsed(true);
+        this.titleMenu?.setCollapsed(true);
         this.sideMenu.setVisible(true, true);
         this.timeControl.setVisible(true);
       }
@@ -339,14 +351,14 @@ export class ManagerWebComponents {
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Magnetism",
-      () => this.game.map.polesMap.magnetismMap
+      () => SystemPoles.magnetismMap
     );
 
     this.overlay.generateOverlay(
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Temperature",
-      () => this.game.map.tempMap.tempMap
+      () => SystemTemperature.getMap()
     );
 
     this.overlay.generateGradientOverlay(
@@ -354,14 +366,14 @@ export class ManagerWebComponents {
       GameSettings.options.gameSize.height,
       "Temperature (blue <---> red)",
       { min: "blue", max: "red" },
-      () => this.game.map.tempMap.tempMap
+      () => SystemTemperature.getMap()
     );
 
     this.overlay.generateOverlay(
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Moisture",
-      () => this.game.map.moistureMap.moistureMap
+      () => SystemMoisture.moistureMap
     );
 
     this.overlay.generateOverlay(

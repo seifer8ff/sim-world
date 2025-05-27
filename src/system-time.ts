@@ -1,6 +1,8 @@
 import Action from "rot-js/lib/scheduler/action";
 import { GameSettings } from "./game-settings";
 import { ActorBase } from "./actor";
+import ordinal from "ordinal";
+import { capitalize } from "lodash";
 
 export enum DayPhase {
   "morning" = 0,
@@ -22,7 +24,7 @@ export class SystemTime {
   public static turnAnimTimePercent: number = 0;
 
   // time values are in turns
-  public static maxTimeScale: number = 10;
+  public static maxTimeScale: number = 500;
   public static daysPerYear: number = 10;
   public static dayLength: number = 70;
   public static nightLength: number = 50;
@@ -113,7 +115,7 @@ export class SystemTime {
   }
 
   public static getCurrentTimeForDisplay(): string {
-    return `Year: ${this.currentYear}  -  ${
+    return `${ordinal(this.currentYear)} ${capitalize(this.season)}  -  ${
       this.isDayTime ? "Day" : "Night"
     }: ${this.currentDay}  -  Hour: ${this.currentTime}`;
   }

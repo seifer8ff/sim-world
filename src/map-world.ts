@@ -4,32 +4,44 @@ import { BaseTileKey, Tile } from "./tile";
 import { Point } from "./point";
 import { Layer } from "./renderer";
 import { Autotile } from "./autotile";
-import Simplex from "rot-js/lib/noise/simplex";
 import { LightManager } from "./light-manager";
 import {
   getMapStats,
   getScaledNoise,
-  indexToPosition,
   lerp,
   positionToIndex,
 } from "./misc-utility";
-import { MapTemperature } from "./map-temperature";
-import { MapMoisture } from "./map-moisture";
+import { SystemTemperature } from "./system-temperature";
+import { SystemMoisture } from "./system-moisture";
 import { Season, SystemTime } from "./system-time";
-import { Biome, BiomeId, Biomes, ImpassibleBorder } from "./biomes";
+import {
+  BaseTerrainBiomeId,
+  Biome,
+  BiomeId,
+  Biomes,
+  ImpassibleBorder,
+} from "./biomes";
 import { Color as ColorType } from "rot-js/lib/color";
 import { SystemShadows } from "./system-shadows";
-import { MapPoles } from "./map-poles";
-import { MapClouds } from "./map-clouds";
+import { SystemPoles } from "./system-poles";
+import { SystemClouds } from "./system-clouds";
 import Noise from "rot-js/lib/noise/noise";
-import { clamp } from "rot-js/lib/util";
-import { Assets, Sprite, Texture } from "pixi.js";
 import { GameSettings } from "./game-settings";
-import { shuffle } from "lodash";
 import { TileStats } from "./web-components/tile-info";
 import { SystemCollision } from "./system-collision";
 import { SystemOcclusion } from "./system-occlusion";
 import { Viewport } from "./camera";
+
+// Interface for detailed tile information returned by getTileDetails method
+export interface TileDetails {
+  position: Point;
+  height: number;
+  temperature: number;
+  moisture: number;
+  magnetism: number;
+  sunlight: number;
+  biome?: Biome;
+}
 
 export type MapType = ValueMap | BiomeMap | TileMap;
 export type ValueMap = Map<number, number>;
@@ -59,11 +71,8 @@ export class MapWorld {
   public tileMap: TileMap; // the final map of tiles to be drawn (may or may not be autotiled)
   public heightMap: ValueMap; // number between 0 and 1 representing height
   public heightLayerMap: Map<number, HeightLayer>;
-  public tempMap: MapTemperature;
-  public moistureMap: MapMoisture;
-  public polesMap: MapPoles;
-  public cloudMap: MapClouds;
   public seaLevel: number;
+  public ready: boolean; // whether the map is ready to be used
 
   public heightAdjacencyD1Map: number[][]; // adjacency map with distance of 1 tile
   public heightAdjacencyD2Map: number[][];
@@ -76,21 +85,18 @@ export class MapWorld {
 
   public biomeAdjacencyD1Map: BiomeId[][]; // adjacency map with distance of 1 tile
   public biomeAdjacencyD2Map: BiomeId[][];
-  private landHeight: number;
+  private landAmountModifier: number;
   private valleyScaleFactor: number;
-  private edgePadding: number;
-  private islandMask: number;
+  private heightMaskStrength: number;
+  private heightMaskStartDistance: number;
 
   constructor(private game: Game) {
+    this.ready = false;
     this.tileMap = [];
     this.biomeMap = new Map();
     this.autotileMap = new Map();
     this.heightMap = new Map();
     this.heightLayerMap = new Map();
-    this.moistureMap = new MapMoisture(this.game, this);
-    this.tempMap = new MapTemperature(this.game, this);
-    this.polesMap = new MapPoles(this.game, this);
-    this.cloudMap = new MapClouds(this.game, this);
     this.lightManager = new LightManager(this.game, this);
     this.terrainMap = new Map();
     this.seaLevel = Biomes.Biomes.ocean.generationOptions.height.max;
@@ -102,33 +108,18 @@ export class MapWorld {
     this.terrainAdjacencyD2Map = [];
     this.biomeAdjacencyD1Map = [];
     this.biomeAdjacencyD2Map = [];
-    this.landHeight = 0.5;
+    this.landAmountModifier =
+      GameSettings.options.generation.landAmountModifier;
     this.valleyScaleFactor = 2;
-    this.edgePadding = 0;
-    this.islandMask = 0.38;
+    this.heightMaskStrength =
+      GameSettings.options.generation.heightMaskStrength;
+    this.heightMaskStartDistance =
+      GameSettings.options.generation.heightMaskStartDistance;
   }
 
-  public static biomeHeightToLayer(
-    height: number,
-    biomeId?: BiomeId
-  ): HeightLayer {
+  public static biomeHeightToLayer(height: number): HeightLayer {
     // TODO: overhaul how valley/holes work. They probably should be below sealevel, but idk
 
-    // if (height < Biomes.Biomes.valley.generationOptions.height.min) {
-    //   return HeightLayer.Hole;
-    // }
-    // if (
-    //   height >= Biomes.Biomes.valley.generationOptions.height.min &&
-    //   height <= Biomes.Biomes.valley.generationOptions.height.max
-    // ) {
-    //   if (biome?.id == Biomes.Biomes.valley.id) {
-    //     // valley can only exist on moistdirt
-    //     // otherwise everything below seaLevel would be valley
-    //     return HeightLayer.Valley;
-    //   } else {
-    //     return HeightLayer.SeaLevel;
-    //   }
-    // }
     if (height < Biomes.Biomes.hillslow.generationOptions.height.min) {
       return HeightLayer.SeaLevel;
     }
@@ -169,12 +160,16 @@ export class MapWorld {
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         index = positionToIndex(x, y, Layer.TERRAIN);
-        this.polesMap.generateMagnetism(x, y, width, height, this.game.noise);
+        SystemPoles.generateMagnetism(x, y, width, height, this.game.noise);
         this.heightMap.set(
           index,
           this.getHeight(x, y, width, height, this.game.noise)
         );
-        this.terrainMap.set(index, this.assignTerrain(x, y));
+        this.heightLayerMap.set(
+          index,
+          MapWorld.biomeHeightToLayer(this.heightMap.get(index))
+        );
+        this.terrainMap.set(index, this.assignBaseTerrain(x, y));
       }
     }
     // console.log("poles map", this.polesMap.magnetismMap);
@@ -200,44 +195,41 @@ export class MapWorld {
     // third pass, generate climate maps
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
-        this.moistureMap.generateMoistureFor(
-          x,
-          y,
-          width,
-          height,
-          this.game.noise
-        );
-        this.tempMap.generateInitialTemp(x, y, width, height, this.game.noise);
+        SystemMoisture.generate(x, y, width, height, this.game.noise, this);
+        SystemTemperature.generate(x, y, width, height, this.game.noise, this);
       }
     }
 
-    const stats = getMapStats(Array.from(this.tempMap.tempMap.values()), [
-      { label: "over90", threshold: 0.9 },
-      { label: "over80", threshold: 0.8 },
-      { label: "over70", threshold: 0.7 },
-      { label: "over55", threshold: 0.55 },
-      { label: "over32", threshold: 0.32 },
-      {
-        label: "under55",
-        threshold: 0.55,
-        isNegative: true,
-      },
-      {
-        label: "under32",
-        threshold: 0.32,
-        isNegative: true,
-      },
-      {
-        label: "under15",
-        threshold: 0.15,
-        isNegative: true,
-      },
-      {
-        label: "under0",
-        threshold: 0,
-        isNegative: true,
-      },
-    ]);
+    const stats = getMapStats(
+      Array.from(SystemTemperature.getBaseMap().values()),
+      [
+        { label: "over90", threshold: 0.9 },
+        { label: "over80", threshold: 0.8 },
+        { label: "over70", threshold: 0.7 },
+        { label: "over55", threshold: 0.55 },
+        { label: "over32", threshold: 0.32 },
+        {
+          label: "under55",
+          threshold: 0.55,
+          isNegative: true,
+        },
+        {
+          label: "under32",
+          threshold: 0.32,
+          isNegative: true,
+        },
+        {
+          label: "under15",
+          threshold: 0.15,
+          isNegative: true,
+        },
+        {
+          label: "under0",
+          threshold: 0,
+          isNegative: true,
+        },
+      ]
+    );
     console.log("temp map", stats);
     // assign biome map using climate maps
     for (let x = 0; x < width; x++) {
@@ -297,14 +289,12 @@ export class MapWorld {
     } else {
       this.generateBasetileMap(this.biomeMap);
     }
+    this.ready = true;
   }
 
   public getHeightLayer(x: number, y: number): HeightLayer {
     const index = positionToIndex(x, y, Layer.TERRAIN);
-    return MapWorld.biomeHeightToLayer(
-      this.heightMap.get(index),
-      this.biomeMap.get(index)
-    );
+    return MapWorld.biomeHeightToLayer(this.heightMap.get(index));
   }
 
   private generateBasetileMap(rawMap: Map<number, BiomeId>) {
@@ -319,26 +309,22 @@ export class MapWorld {
     }
   }
 
-  getHeight(
+  /**
+   *
+   * @param x x coordinate
+   * @param y y coordinate
+   * @param mapWidth width of overall map
+   * @param mapHeight height of overall map
+   * @param noise the noise object to use for generating height
+   * @returns height value between 0 and 1
+   */
+  private getHeight(
     x: number,
     y: number,
     mapWidth: number,
     mapHeight: number,
     noise: Noise
   ): number {
-    // randomize the edge padding to prevent a squared-off look
-    const randomizedEdgePadding = this.edgePadding + RNG.getUniformInt(0, 2);
-
-    // if near the edge of the map, return a lower height
-    if (
-      x < randomizedEdgePadding ||
-      x >= mapWidth - randomizedEdgePadding ||
-      y < randomizedEdgePadding ||
-      y >= mapHeight - randomizedEdgePadding
-    ) {
-      return this.landHeight / 2;
-    }
-
     let noiseX = x / mapWidth - 0.5;
     let noiseY = y / mapHeight - 0.5;
 
@@ -353,23 +339,74 @@ export class MapWorld {
 
     height = Math.pow(height, this.valleyScaleFactor); // reshape valleys/mountains
 
-    // reduce height near edges of map
+    // Apply land amount modifier by adjusting the effective sea level
+    if (this.landAmountModifier !== 1) {
+      // Calculate an adjusted sea level based on the modifier
+      // When modifier is > 1, sea level is effectively lower
+      // When modifier is < 1, sea level is effectively higher
+      const adjustmentFactor = 2 * (1 - this.landAmountModifier);
+
+      // Shift the height distribution relative to sea level
+      // This effectively changes how much land is above sea level
+      height = height - adjustmentFactor * this.seaLevel;
+
+      // Re-normalize to 0-1 range
+      height = Math.max(0, Math.min(1, height));
+    }
+
     const dx = (2 * x) / mapWidth - 1;
     const dy = (2 * y) / mapHeight - 1;
-    const d = 1 - (1 - Math.pow(dx, 2)) * (1 - Math.pow(dy, 2));
-    height = lerp(this.islandMask, height, 1 - d);
+    // height = height * this.landAmountModifier;
+    height = this.applyHeightMask(height, dx, dy);
+    // height = MapWorld.biomeHeightToLayer(height);
+    // height = this.applyHeightTerracing(height);
 
     return height;
   }
 
-  assignTerrain(x: number, y: number): BiomeId {
+  /**
+   * Apply a height mask to the height value based on the distance from the edge of the map.
+   * The mask is stronger near the edges and weaker as we move inward.
+   *
+   * @param originalHeight The initial height value.
+   * @param dx The x coordinate normalized to -1 to 1, where 0 is the center.
+   * @param dy The y coordinate normalized to -1 to 1.
+   * @return The masked height value.
+   */
+  private applyHeightMask(
+    originalHeight: number,
+    dx: number,
+    dy: number
+  ): number {
+    let height: number = originalHeight;
+    // only mask within x tiles of the edge of the map
+    const edgeDistance = 1 - this.heightMaskStartDistance; // percent from the edge to mask
+
+    // Calculate distance from edge (0 = at edge, 1 = at edgeDistance or beyond)
+    const distFromEdge = Math.min(
+      Math.abs(Math.abs(dx) - 1) / edgeDistance,
+      Math.abs(Math.abs(dy) - 1) / edgeDistance,
+      1
+    );
+
+    if (distFromEdge < 1) {
+      // Apply stronger mask near edges, weakening as we move inward
+      const maskFactor = distFromEdge; // 0 at edge, 1 at edgeDistance
+      // set the height to the masked value, modified by the overall strength of the mask
+      height = lerp(this.heightMaskStrength, height, height * maskFactor);
+    }
+
+    return height;
+  }
+
+  assignBaseTerrain(x: number, y: number): BaseTerrainBiomeId {
     // assign the high level terrain types
     // features will be placed within these terrain types for tiling transition purposes
     const heightVal = this.heightMap.get(positionToIndex(x, y, Layer.TERRAIN));
     if (
       Biomes.inRangeOf(heightVal, Biomes.Biomes.ocean.generationOptions.height)
     ) {
-      return Biomes.Biomes.ocean.id;
+      return Biomes.Biomes.ocean.id as BaseTerrainBiomeId;
     }
 
     if (
@@ -378,7 +415,7 @@ export class MapWorld {
         Biomes.Biomes.moistdirt.generationOptions.height
       )
     ) {
-      return Biomes.Biomes.moistdirt.id;
+      return Biomes.Biomes.moistdirt.id as BaseTerrainBiomeId;
     }
 
     if (
@@ -387,26 +424,15 @@ export class MapWorld {
         Biomes.Biomes.sandydirt.generationOptions.height
       )
     ) {
-      return Biomes.Biomes.sandydirt.id;
+      return Biomes.Biomes.sandydirt.id as BaseTerrainBiomeId;
     }
   }
 
   private processTerrain(x: number, y: number): BiomeId {
-    const key = MapWorld.coordsToKey(x, y);
     const index = positionToIndex(x, y, Layer.TERRAIN);
     const terrain = this.terrainMap.get(index);
-    const adjacentTerrain = this.terrainAdjacencyD2Map[index];
+    // const adjacentTerrain = this.terrainAdjacencyD2Map[index];
     // const moistureVal = this.moistureMap.getMoistureByKey(key);
-
-    // check if any adjacent terrain is null- if so, set to ocean
-    if (adjacentTerrain.some((terrain) => terrain == null)) {
-      const newHeight = Biomes.Biomes.ocean.generationOptions.height.max - 0.1;
-      this.heightMap.set(index, newHeight);
-      this.shiftHeight(x, y, Biomes.Biomes.ocean.id);
-      this.shiftMoisture(x, y, Biomes.Biomes.ocean);
-      this.shiftTemperature(x, y, Biomes.Biomes.ocean);
-      return Biomes.Biomes.ocean.id;
-    }
 
     // add a single tile thick border of sandydirt around moistdirt coasts to improve autotiling
     if (terrain === Biomes.Biomes.moistdirt.id) {
@@ -416,8 +442,8 @@ export class MapWorld {
         ])
       ) {
         this.shiftHeight(x, y, Biomes.Biomes.sandydirt.id);
-        this.shiftMoisture(x, y, Biomes.Biomes.sandydirt);
-        this.shiftTemperature(x, y, Biomes.Biomes.sandydirt);
+        this.shiftMoisture(x, y, Biomes.Biomes.sandydirt.id);
+        this.shiftTemperature(x, y, Biomes.Biomes.sandydirt.id);
         return Biomes.Biomes.sandydirt.id;
       }
     }
@@ -435,8 +461,8 @@ export class MapWorld {
         ])
       ) {
         this.shiftHeight(x, y, Biomes.Biomes.sandydirt.id);
-        this.shiftTemperature(x, y, Biomes.Biomes.sandydirt);
-        this.shiftMoisture(x, y, Biomes.Biomes.sandydirt);
+        this.shiftTemperature(x, y, Biomes.Biomes.sandydirt.id);
+        this.shiftMoisture(x, y, Biomes.Biomes.sandydirt.id);
         return Biomes.Biomes.sandydirt.id;
       }
     }
@@ -444,32 +470,45 @@ export class MapWorld {
     return biomeId;
   }
 
-  private shiftHeight(x: number, y: number, newBiomeId: BiomeId) {
+  /***
+   * Shift the terrain height into the new biome height range.
+   * Updates the height map and the height layer map
+   * @param x x coordinate
+   * @param y y coordinate
+   * @param newBiomeId the biome id to shift to
+   */
+  private shiftHeight(x: number, y: number, newBiomeId: BiomeId): void {
     const index = positionToIndex(x, y, Layer.TERRAIN);
     const height = this.heightMap.get(index);
     const newBiome = Biomes.Biomes[newBiomeId];
+    if (!newBiome) {
+      console.error("Biome not found", newBiomeId);
+      return;
+    }
     this.heightMap.set(
       index,
       Biomes.shiftToBiome(height, newBiome.generationOptions.height)
     );
     this.heightLayerMap.set(
       index,
-      MapWorld.biomeHeightToLayer(this.heightMap.get(index), newBiomeId)
+      MapWorld.biomeHeightToLayer(this.heightMap.get(index))
     );
   }
 
-  private shiftTemperature(x: number, y: number, newBiome: Biome) {
-    const temp = this.tempMap.getTemp(x, y);
-    this.tempMap.setTemp(
+  private shiftTemperature(x: number, y: number, newBiomeId: BiomeId) {
+    const newBiome = Biomes.Biomes[newBiomeId];
+    const temp = SystemTemperature.get(x, y);
+    SystemTemperature.set(
       x,
       y,
       Biomes.shiftToBiome(temp, newBiome.generationOptions.temperature)
     );
   }
 
-  private shiftMoisture(x: number, y: number, newBiome: Biome) {
-    const moisture = this.moistureMap.getMoisture(x, y);
-    this.moistureMap.setMoisture(
+  private shiftMoisture(x: number, y: number, newBiomeId: BiomeId) {
+    const newBiome = Biomes.Biomes[newBiomeId];
+    const moisture = SystemMoisture.get(x, y);
+    SystemMoisture.set(
       x,
       y,
       Biomes.shiftToBiome(moisture, newBiome.generationOptions.moisture)
@@ -484,8 +523,8 @@ export class MapWorld {
     ];
     const maps = {
       height: this.heightMap,
-      temperature: this.tempMap.tempMap,
-      moisture: this.moistureMap.moistureMap,
+      temperature: SystemTemperature.getBaseMap(),
+      moisture: SystemMoisture.moistureMap,
     };
     if (biomeId == Biomes.Biomes.hillsmid.id) {
       if (
@@ -530,8 +569,8 @@ export class MapWorld {
     const index = positionToIndex(x, y, Layer.TERRAIN);
     const terrain = this.terrainMap.get(index);
     const height = this.heightMap.get(index);
-    const temp = this.tempMap.getTempByIndex(index);
-    const moisture = this.moistureMap.getMoisture(x, y);
+    const temp = SystemTemperature.getByIndex(index);
+    const moisture = SystemMoisture.get(x, y);
     const biomeId = this.biomeMap.get(index);
     const adjacentBiomes = this.biomeAdjacencyD2Map[index];
 
@@ -573,7 +612,7 @@ export class MapWorld {
         return Biomes.Biomes.hillsmid.id;
       }
     }
-    if (isMidHeight) {
+    if (isMidHeight && biomeId) {
       this.shiftHeight(x, y, biomeId);
     }
     return biomeId;
@@ -601,7 +640,7 @@ export class MapWorld {
         return Biomes.Biomes.hillshigh.id;
       }
     }
-    if (isUpperHeight) {
+    if (isUpperHeight && biomeId) {
       this.shiftHeight(x, y, biomeId);
     }
     return biomeId;
@@ -627,7 +666,7 @@ export class MapWorld {
       }
     }
 
-    if (isLowerHeight) {
+    if (isLowerHeight && biomeId) {
       this.shiftHeight(x, y, biomeId);
     }
 
@@ -798,8 +837,8 @@ export class MapWorld {
     const terrain = this.terrainMap.get(positionToIndex(x, y, Layer.TERRAIN));
     const maps = {
       height: this.heightMap,
-      temperature: this.tempMap.tempMap,
-      moisture: this.moistureMap.moistureMap,
+      temperature: SystemTemperature.getBaseMap(),
+      moisture: SystemMoisture.moistureMap,
     };
 
     if (terrain === Biomes.Biomes.ocean.id) {
@@ -1153,9 +1192,9 @@ export class MapWorld {
     const index = positionToIndex(x, y, Layer.TERRAIN);
     return {
       height: this.heightMap.get(index),
-      magnetism: this.polesMap.magnetismMap.get(index),
-      temperaturePercent: this.tempMap.getTempByIndex(index),
-      moisture: this.moistureMap.getMoistureByIndex(index),
+      magnetism: SystemPoles.magnetismMap.get(index),
+      temperaturePercent: SystemTemperature.getByIndex(index),
+      moisture: SystemMoisture.getByIndex(index),
       sunlight: this.getTotalLight(x, y),
       biome: Biomes.Biomes[this.biomeMap.get(index)],
     };
@@ -1163,43 +1202,61 @@ export class MapWorld {
 
   getTotalLight(x: number, y: number): number {
     const posIndex = positionToIndex(x, y, Layer.TERRAIN);
-    const lightFromShadows = SystemShadows.shadowMap[posIndex];
-    // const lightFromOcc = this.shadowMap.occlusionMap[posIndex];
-    const lightFromOcc = SystemOcclusion.occlusionMap[posIndex];
-    const cloudLevel = this.cloudMap.get(posIndex);
-    let lightFromClouds = 1;
-    if (cloudLevel > this.cloudMap.cloudMinLevel) {
-      // reduce the light by the amount of cloud cover
-      lightFromClouds = 1 - (cloudLevel - this.cloudMap.cloudMinLevel);
-    } else if (cloudLevel < this.cloudMap.sunbeamMaxLevel) {
-      // increase light by how much sunbeam there is
-      lightFromClouds = 1 + cloudLevel;
-    }
     // console.throttle(250).log("lightFromClouds", lightFromClouds, cloudLevel);
-    let ambientLight = 1;
+    let totalLight = 1;
     if (GameSettings.options.toggles.enableGlobalLights) {
-      ambientLight = SystemTime.remainingPhasePercent;
+      totalLight = SystemTime.remainingPhasePercent;
     }
-    let finalLight =
-      lightFromShadows * ambientLight * lightFromOcc * lightFromClouds;
+
+    if (GameSettings.options.toggles.enableOcclusionShadows) {
+      const occlusionAmount = SystemOcclusion.occlusionMap[posIndex];
+      const isOccluded = occlusionAmount > 0;
+      if (isOccluded) {
+        // console.log("occlusionAmount", occlusionAmount);
+        totalLight *= 1 - occlusionAmount * SystemOcclusion.strengthMultiplier;
+      }
+    }
+
+    if (GameSettings.options.toggles.enableSunShadows) {
+      const shadowAmount = SystemShadows.shadowMap[posIndex];
+      const isShadowed = shadowAmount > 0;
+      if (isShadowed) {
+        // console.log("shadowAmount", shadowAmount);
+        totalLight *= 1 - shadowAmount * SystemShadows.shadowStrength;
+      }
+    }
+    // if (isShadowed) {
+    //   totalLight *= shadowAmount;
+    // }
+
+    if (GameSettings.options.toggles.enableClouds) {
+      let cloudAmount = SystemClouds.get(posIndex);
+      cloudAmount -= SystemClouds.cloudMinLevel;
+      const isCloudy = cloudAmount > 0;
+      if (isCloudy) {
+        // console.log("cloudAmount", cloudAmount);
+        totalLight *= 1 - cloudAmount * SystemClouds.cloudStrength;
+      }
+    }
     // can go over 1 due to lightening effect from sunbeams/clouds
-    if (finalLight < 0) {
-      finalLight = 0;
+    if (totalLight < 0) {
+      totalLight = 0;
     }
-    if (finalLight > 1) {
-      finalLight = 1;
+    if (totalLight > 1) {
+      totalLight = 1;
     }
-    return finalLight;
+    return totalLight;
   }
 
-  onTileEnterViewport(viewport: Viewport, tiles: number[]): void {
-    const map = this.game.map;
-    SystemOcclusion.onEnter(this.game.map, tiles);
-    SystemShadows.onEnter(viewport, map);
-    this.cloudMap.onEnter(tiles);
-    this.lightManager.onEnter(tiles);
-    // TODO: add a step to render tile
-    // this will fix shadows not updating immediately when panning
+  onTileEnterViewport(viewport: Viewport, updateTileIndexes: number[]): void {
+    if (this.ready) {
+      SystemOcclusion.onEnter(this, updateTileIndexes);
+      SystemShadows.onEnter(viewport, this);
+      SystemClouds.onEnter(updateTileIndexes, this);
+      this.lightManager.onEnter(updateTileIndexes);
+      // TODO: add a step to render tile
+      // this will fix shadows not updating immediately when panning
+    }
   }
 
   isPointInMap(point: Point): boolean {

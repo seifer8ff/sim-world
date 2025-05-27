@@ -1,4 +1,4 @@
-import { indexToXY, positionToIndex } from "./misc-utility";
+import { indexToXY, lerp, positionToIndex } from "./misc-utility";
 import { HeightLayer, MapWorld } from "./map-world";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
@@ -20,15 +20,15 @@ export const HeightDropoff = {
  */
 export class SystemOcclusion {
   public static occlusionMap: number[] = [];
+  // multiplier on the occlusion map itself. Changes based on time of day, etc
+  public static strengthMultiplier: number = 1;
 
-  // Shadow parameters
-  // these get updated as time passes
-  public static ambientOcclusionShadowStrength: number = 1; // multiplier on the occlusion map itself
-  private static readonly DayStartStrength = 1.9; // Strong shadows in morning
-  private static readonly DayMidStrength = 0.5; // Minimal shadows at midday
-  private static readonly DayEndStrength = 1.8; // Medium-strong shadows in evening
-  private static readonly NightMidStrength = 1.3; // Weak shadows at midday
-  private static readonly MinAmbientLight = 0.15; // Minimum ambient light
+  // strength of occlusion shadows at different times of day
+  private static readonly DayStartStrength = 2; // Strong shadows in morning
+  private static readonly DayMidStrength = 1; // Minimal shadows at midday
+  private static readonly DayEndStrength = 2; // Medium-strong shadows in evening
+  private static readonly NightMidStrength = 4; // strong shadows at midday
+  private static readonly MaxOcclusionAmount = 0.17; // cutoff value for occlusion map shadow strength
 
   public static init() {
     // init shadow map and occlusion map with default values
@@ -38,7 +38,7 @@ export class SystemOcclusion {
     for (let x = 0; x < mapWidth; x++) {
       for (let y = 0; y < mapHeight; y++) {
         posIndex = positionToIndex(x, y, Layer.TERRAIN);
-        SystemOcclusion.occlusionMap[posIndex] = 1; // 1 means no occlusion
+        SystemOcclusion.occlusionMap[posIndex] = 0; // 0 means no occlusion
       }
     }
   }
@@ -65,10 +65,10 @@ export class SystemOcclusion {
       switch (phase) {
         case DayPhase.morning:
           // Lerp from morning to midday (morning strength → mid strength)
-          shadowStrength = this.lerp(
+          shadowStrength = lerp(
+            remainingPhasePercent, // 0 - 1 for morning phase
             this.DayStartStrength,
-            this.DayMidStrength,
-            remainingPhasePercent // 0 - 1 for morning phase
+            this.DayMidStrength
           );
           break;
 
@@ -79,27 +79,22 @@ export class SystemOcclusion {
 
         case DayPhase.evening:
           // Lerp from midday to evening (mid strength → evening strength)
-          shadowStrength = this.lerp(
+          shadowStrength = lerp(
+            remainingPhasePercent, // 1 to 0 for evening phase
             this.DayEndStrength,
-            this.DayMidStrength,
-            remainingPhasePercent // 1 to 0 for evening phase
+            this.DayMidStrength
           );
           break;
-
-        // default:
-        //   // Default to midday strength if we're in an unknown phase
-        //   shadowStrength = this.DayMidStrength;
-        //   break;
       }
     } else {
       // night time
       switch (phase) {
         case DayPhase.morning:
           // Lerp from evening to mid day (evening strength → mid day strength)
-          shadowStrength = this.lerp(
+          shadowStrength = lerp(
+            remainingPhasePercent, // 0 to 1 for night phase
             this.DayEndStrength,
-            this.NightMidStrength,
-            remainingPhasePercent // 0 to 1 for night phase
+            this.NightMidStrength
           );
 
           break;
@@ -111,10 +106,10 @@ export class SystemOcclusion {
 
         case DayPhase.evening:
           // Lerp from midday to morning (mid strength → morning strength)
-          shadowStrength = this.lerp(
+          shadowStrength = lerp(
+            remainingPhasePercent, // 1 to 0 for evening phase
             this.DayStartStrength,
-            this.NightMidStrength,
-            remainingPhasePercent // 1 to 0 for evening phase
+            this.NightMidStrength
           );
           break;
 
@@ -126,29 +121,21 @@ export class SystemOcclusion {
     }
 
     // Set the calculated shadow strength
-    SystemOcclusion.ambientOcclusionShadowStrength = shadowStrength;
-  }
-
-  /**
-   * Linear interpolation between two values
-   * @param a First value
-   * @param b Second value
-   * @param t Interpolation factor (0-1)
-   * @returns Interpolated value
-   */
-  private static lerp(a: number, b: number, t: number): number {
-    return a * (1 - t) + b * t;
+    SystemOcclusion.strengthMultiplier = shadowStrength;
   }
 
   /**
    * Updates ambient occlusion map for visible tiles
    */
-  public static updateOcclusionShadowMap(map: MapWorld, tileIndexes: number[]) {
+  public static updateOcclusionShadowMap(
+    map: MapWorld,
+    updateTileIndexes: number[]
+  ) {
     // return;
     if (!GameSettings.options.toggles.enableOcclusionShadows) return;
 
-    for (let i = 0; i < tileIndexes.length; i++) {
-      const posIndex = tileIndexes[i];
+    for (let i = 0; i < updateTileIndexes.length; i++) {
+      const posIndex = updateTileIndexes[i];
       const [x, y] = indexToXY(posIndex, Layer.TERRAIN);
 
       // Calculate ambient occlusion based on height differences with adjacent tiles
@@ -165,7 +152,7 @@ export class SystemOcclusion {
       const occlusionFactorD1 = SystemOcclusion.calculateOcclusionFactor(
         heightLayer,
         adjacentD1,
-        SystemOcclusion.ambientOcclusionShadowStrength // Stronger occlusion effect for immediate neighbors
+        1 // Stronger occlusion effect for immediate neighbors
       );
 
       // Calculate occlusion from extended neighbors (subtler effect)
@@ -174,14 +161,14 @@ export class SystemOcclusion {
           ? SystemOcclusion.calculateOcclusionFactor(
               heightLayer,
               adjacentD2,
-              SystemOcclusion.ambientOcclusionShadowStrength / 2
+              1 / 3 // Weaker occlusion effect for extended neighbors
             )
-          : SystemOcclusion.ambientOcclusionShadowStrength;
+          : 0;
 
       // Combine both occlusion factors, prioritizing the stronger effect
-      SystemOcclusion.occlusionMap[posIndex] = Math.min(
+      SystemOcclusion.occlusionMap[posIndex] = Math.max(
         occlusionFactorD1,
-        occlusionFactorD2 + 0.2
+        occlusionFactorD2
       );
     }
   }
@@ -192,9 +179,9 @@ export class SystemOcclusion {
   private static calculateOcclusionFactor(
     heightLayer: HeightLayer,
     adjacentLayers: HeightLayer[],
-    strength: number = SystemOcclusion.ambientOcclusionShadowStrength
+    strength: number = SystemOcclusion.strengthMultiplier
   ): number {
-    let occlusionFactor = 1.0; // No occlusion by default
+    let occlusionFactor = 0.0; // No occlusion by default
     let surroundingHigherTilesCount = 0;
 
     for (const adjacentLayer of adjacentLayers) {
@@ -207,27 +194,28 @@ export class SystemOcclusion {
         surroundingHigherTilesCount++;
 
         // Stronger occlusion with greater height differences
-        const layerOcclusion = 1 - heightDiff * strength;
-        occlusionFactor = Math.min(occlusionFactor, layerOcclusion);
+        const layerOcclusion = heightDiff * strength;
+        occlusionFactor = Math.max(occlusionFactor, layerOcclusion);
       }
     }
 
     // Apply additional occlusion when surrounded by multiple higher tiles (valley effect)
     if (surroundingHigherTilesCount > 2) {
-      occlusionFactor *= 1 - (surroundingHigherTilesCount - 2) * 0.05;
+      occlusionFactor *= 1 + (surroundingHigherTilesCount - 2) * 0.1;
     }
 
-    return Math.max(occlusionFactor, this.MinAmbientLight); // Ensure minimum ambient light
+    // Limit the occlusion factor to a maximum value
+    return Math.min(this.MaxOcclusionAmount, occlusionFactor);
   }
 
   /**
    * Handle when tiles enter the viewport.
    * Important when game is paused, as shadows are updated after turns.
    */
-  public static onEnter(map: MapWorld, indexes: number[]): void {
+  public static onEnter(map: MapWorld, updateTileIndexes: number[]): void {
     if (!GameSettings.options.toggles.enableOcclusionShadows) return;
 
     // Update the occlusion map for the new tiles
-    SystemOcclusion.updateOcclusionShadowMap(map, indexes);
+    SystemOcclusion.updateOcclusionShadowMap(map, updateTileIndexes);
   }
 }

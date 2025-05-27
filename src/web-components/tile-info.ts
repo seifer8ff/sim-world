@@ -145,22 +145,6 @@ export class TileInfo extends HTMLElement {
     shadow.appendChild(this.container);
   }
 
-  // update the content of the Html description blocks
-  // with the latest data from the pointer target.
-  // run frequently to keep the UI up to date
-  public refreshContent(pointerTarget: PointerTarget): void {
-    this.target = pointerTarget;
-    if (!this.dElements || !this.isVisible || !this.target || !this.isVisible) {
-      return;
-    }
-    this.dElements.forEach((dElement) => {
-      // there's no need to update the icon, it only changes when target changes
-      const text = dElement.element.querySelector("span");
-      // text.textContent = dElement.dBlock.getDescription(this.target);
-      text.textContent = dElement.dBlock.content;
-    });
-  }
-
   // used for hiding the entire game UI, like for the main menu
   public setVisible(visible: boolean): void {
     this.isVisible = visible;

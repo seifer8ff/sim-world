@@ -108,7 +108,7 @@ export class SkyMask extends HTMLElement {
   //   canvas.height = window.innerHeight;
   //   container.appendChild(canvas);
 
-  //   const ctx = canvas.getContext("2d");
+  //   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   //   const cloudColor = "rgba(255, 255, 255, 0.2)";
   //   const cloudRadius = 100;
   //   const cloudCount = 10;

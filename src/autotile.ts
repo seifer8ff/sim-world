@@ -97,6 +97,9 @@ export class Autotile {
     tileBiomeId: BiomeId
   ): number {
     const tileBiome = Biomes.Biomes[tileBiomeId];
+    if (tileBiomeId == null) {
+      console.log("tileBiomeId is null");
+    }
     let sum = 0;
     let n = false;
     let e = false;
@@ -158,7 +161,6 @@ export class Autotile {
       s = true;
       sum += Autotile.S;
     }
-
     if (
       n &&
       w &&
@@ -169,8 +171,9 @@ export class Autotile {
         onlyBiomes,
         skipBiomes
       )
-    )
+    ) {
       sum += Autotile.NW;
+    }
     if (
       n &&
       e &&
@@ -181,8 +184,9 @@ export class Autotile {
         onlyBiomes,
         skipBiomes
       )
-    )
+    ) {
       sum += Autotile.NE;
+    }
     if (
       s &&
       w &&
@@ -193,8 +197,9 @@ export class Autotile {
         onlyBiomes,
         skipBiomes
       )
-    )
+    ) {
       sum += Autotile.SW;
+    }
     if (
       s &&
       e &&
@@ -205,8 +210,9 @@ export class Autotile {
         onlyBiomes,
         skipBiomes
       )
-    )
+    ) {
       sum += Autotile.SE;
+    }
 
     return Autotile.BITMASK[sum];
   }
@@ -216,6 +222,7 @@ export class Autotile {
     onlyBiomes?: BiomeId[],
     skipBiomes?: BiomeId[]
   ): boolean {
+    // Null tiles should not affect autotiling
     if (biome == null) {
       return false;
     }
@@ -248,14 +255,9 @@ export class Autotile {
         index = positionToIndex(x, y, Layer.TERRAIN);
         const tileValue = mapObject.get(index);
 
-        if (tileValue == null) {
-          continue;
-        }
-
-        if (!this.shouldAutotile(tileValue, [], [])) {
-          tiles.set(index, 47);
-          continue;
-        }
+        // if (tileValue == null) {
+        //   continue;
+        // }
 
         tiles.set(
           index,

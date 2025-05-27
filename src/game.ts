@@ -25,6 +25,10 @@ import { SystemLLM } from "./system-llm";
 import { SystemOcclusion } from "./system-occlusion";
 import { SystemSunMoon } from "./system-sun-moon";
 import { SystemShadows } from "./system-shadows";
+import { SystemMoisture } from "./system-moisture";
+import { SystemTemperature } from "./system-temperature";
+import { SystemPoles } from "./system-poles";
+import { SystemClouds } from "./system-clouds";
 
 export class Game {
   public settings: GameSettings;
@@ -79,16 +83,17 @@ export class Game {
   }
 
   public resetGame(): void {
-    this.map.cloudMap.init();
-    this.map.polesMap.init();
-    this.map.tempMap.init();
-    this.map.moistureMap.init();
+    SystemPoles.init();
+    SystemTemperature.init();
+    SystemMoisture.init();
     SystemShadows.init();
     SystemOcclusion.init();
+    SystemClouds.init();
     this.map.lightManager.init();
     this.renderer.init();
     SystemLLM.init();
     this.gameState.reset();
+    this.userInterface.components.init();
   }
 
   public async generateWorld(): Promise<boolean> {
@@ -187,9 +192,10 @@ export class Game {
 
       this.map.lightManager.turnUpdate();
       SystemSunMoon.turnUpdate();
+      SystemTemperature.turnUpdate();
       SystemOcclusion.turnUpdate(this.map, viewport.tiles);
       SystemShadows.turnUpdate(viewport, this.map);
-      this.map.cloudMap.turnUpdate();
+      SystemClouds.turnUpdate(this.map, viewport.tiles);
 
       // update dynamic lights after all actors have moved
       // will get picked up in next render
@@ -218,7 +224,7 @@ export class Game {
       SystemTime.renderUpdate(this.turnAnimDelayCounter);
 
       if (GameSettings.options.toggles.enableClouds) {
-        this.map.cloudMap.renderUpdate(interpPercent);
+        SystemClouds.renderUpdate(interpPercent, viewport.tiles);
       }
 
       if (GameSettings.options.toggles.enableGlobalLights) {

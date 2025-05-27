@@ -71,11 +71,21 @@ export function rgbToGrayscale(color: ColorType): ColorType {
   return Color.fromString("rgb(" + gray + "," + gray + "," + gray + ")");
 }
 
-// return noise value between 0 and 1
-export function normalizeNoise(value: number): number {
+// return noise value between 0 and maxValue
+export function normalizeNoise(value: number, maxValue: number = 1): number {
   let noise = Math.min(1, Math.max(-1, value));
-  noise = (noise + 1) / 2;
-  return noise;
+  noise = (noise + 1) / 2; // normalize to 0-1 range
+  return noise * maxValue; // scale to 0-maxValue range
+}
+
+export function normalize(value: number, min: number, max: number): number {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return (value - min) / (max - min);
 }
 
 // export function adjustRgbSaturation(

@@ -65,10 +65,9 @@ export class UserInterface {
 
   public async init() {
     this.game.renderer.addLayersToStage(this.application.stage);
-    await this.initializeBuildTools();
   }
 
-  public async initializeBuildTools(): Promise<boolean> {
+  public initializeBuildTools(): void {
     // TODO: better way of loading icon
     const options: { name: string; iconPath: PIXI.Texture; id: BiomeId }[] = [
       {
@@ -88,7 +87,6 @@ export class UserInterface {
       },
     ];
     this.components.updateSideBarContent("Build", options);
-    return true;
   }
 
   private writeHelpMessage(): void {

@@ -12,6 +12,9 @@ import HeightIcon from "../shoelace/assets/icons/arrow-up-short.svg";
 import { ActorBase } from "../actor";
 import { Tile } from "../tile";
 import { PointerTarget } from "../camera";
+import { GameSettings } from "../game-settings";
+import { SystemMoisture } from "../system-moisture";
+import { SystemTemperature } from "../system-temperature";
 
 export interface DescriptionBlock {
   icon: string;
@@ -59,26 +62,64 @@ export class Description {
       });
       descriptionBlocks.push({
         icon: TempIcon,
-        content: `${Math.round(target?.info?.temperaturePercent * 100)}°F`,
+        content: `${Math.round(
+          this.scalePercentToRange(
+            target?.info?.temperaturePercent,
+            GameSettings.options.temperatureRange
+          )
+        )}°F — ${SystemTemperature.getDescription(
+          target?.info?.temperaturePercent
+        )}`,
       });
       descriptionBlocks.push({
         icon: HeightIcon,
-        content: `${Math.round(target?.info?.height * 100)} height`,
+        content: `${Math.round(
+          this.scalePercentToRange(
+            target?.info?.height,
+            GameSettings.options.heightRange
+          )
+        )} height`,
       });
       descriptionBlocks.push({
         icon: MoistureIcon,
-        content: `${Math.round(target?.info?.moisture * 100)}% moisture`,
+        content: `${Math.round(
+          this.scalePercentToRange(
+            target?.info?.moisture,
+            GameSettings.options.moistureRange
+          )
+        )}% — ${SystemMoisture.getDescriptionForMoisture(
+          target?.info?.moisture
+        )}`,
       });
       descriptionBlocks.push({
         icon: MagnetIcon,
-        content: `${Math.round(target?.info?.magnetism * 100)} magnetism`,
+        content: `${Math.round(
+          this.scalePercentToRange(
+            target?.info?.magnetism,
+            GameSettings.options.magnetismRange
+          )
+        )}% magnetism`,
       });
       descriptionBlocks.push({
         icon: SunIcon,
-        content: `${Math.round(target?.info?.sunlight * 100) || "??"}% light`,
+        content: `${
+          Math.round(
+            this.scalePercentToRange(
+              target?.info?.sunlight,
+              GameSettings.options.sunlightRange
+            )
+          ) || "0"
+        }% light`,
       });
     }
 
     return descriptionBlocks;
+  }
+
+  public static scalePercentToRange(
+    percent: number,
+    { min, max }: { min: number; max: number }
+  ): number {
+    return Math.round(min + (max - min) * percent);
   }
 }

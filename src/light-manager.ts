@@ -16,6 +16,7 @@ import { SystemCollision } from "./system-collision";
 import { DayPhase, SystemTime } from "./system-time";
 import { SystemOcclusion } from "./system-occlusion";
 import { SystemShadows } from "./system-shadows";
+import { SystemClouds } from "./system-clouds";
 
 export const BlockLight: BiomeId[] = [
   "hillslow",
@@ -379,7 +380,7 @@ export class LightManager {
     const shadowMap = SystemShadows.shadowMap;
     // const occlusionMap = this.map.shadowMap.occlusionMap;
     const occlusionMap = SystemOcclusion.occlusionMap;
-    const cloudMap = this.map.cloudMap.cloudMap;
+    const cloudMap = SystemClouds.cloudMap;
     let dynamicLightValue: ColorType;
     let shadowValue: number;
     let occlusionValue: number;
@@ -502,7 +503,6 @@ export class LightManager {
     highlight: boolean = false
   ): ColorType {
     const { map } = this.game;
-    const { cloudMap: globalCloudMap } = map;
     const ambientLight = this.ambientLight;
     const isDaytime = SystemTime.isDayTime;
     const phase = SystemTime.lightPhase;
@@ -513,19 +513,15 @@ export class LightManager {
       ? LightManager.lightDefaults.shadowSunset
       : LightManager.lightDefaults.shadowSunrise;
 
-    const cloudMinLevel = globalCloudMap.cloudMinLevel;
-    const sunbeamMaxLevel = globalCloudMap.sunbeamMaxLevel;
+    const cloudMinLevel = SystemClouds.cloudMinLevel;
+    const sunbeamMaxLevel = SystemClouds.sunbeamMaxLevel;
     const shadowStrength = SystemShadows.shadowStrength;
-    const ambOccShadowStrength = SystemOcclusion.ambientOcclusionShadowStrength;
-    const cloudStrength = globalCloudMap.cloudStrength;
-    const sunbeamStrength = globalCloudMap.sunbeamStrength;
-
-    // const isShadowed =
-    //   Math.abs(shadowMap - globalShadowMap.ambientLightStrength) > 0.01;
-    const isShadowed =
-      shadowValue - GameSettings.options.ambientLightStrength > 0.01 ||
-      shadowValue - GameSettings.options.ambientLightStrength < -0.01;
-    const isOccluded = occlusionValue !== 1;
+    const ambOccShadowStrength = SystemOcclusion.strengthMultiplier;
+    const cloudStrength = SystemClouds.cloudStrength;
+    const sunbeamStrength = SystemClouds.sunbeamStrength;
+    const isShadowed = shadowValue > 0;
+    // const isOccluded = occlusionValue !== 1;
+    const isOccluded = occlusionValue > 0;
     const isClouded = cloudValue > cloudMinLevel;
     const isCloudClear = cloudValue < sunbeamMaxLevel;
 
@@ -552,19 +548,21 @@ export class LightManager {
       light = Color.add(light, lightValue);
     } else {
       if (isOccluded) {
+        // console.log(
+        //   "occluded",
+        //   occlusionValue
+        //   // light,
+        //   // LightManager.lightDefaults.ambientOcc
+        // );
+        // light = LightManager.lightDefaults.ambientOcc;
         light = Color.interpolate(
           light,
           LightManager.lightDefaults.ambientOcc,
-          (1 - occlusionValue) * ambOccShadowStrength
+          occlusionValue * ambOccShadowStrength
         );
       }
       if (isShadowed) {
-        // if (isShadowed && isDaytime) {
-        light = Color.interpolate(
-          light,
-          shadow,
-          (1 - shadowValue) * shadowStrength
-        );
+        light = Color.interpolate(light, shadow, shadowValue * shadowStrength);
       }
     }
 
@@ -580,13 +578,13 @@ export class LightManager {
     }
 
     if (isCloudClear) {
-      light = Color.interpolate(
-        light,
-        isNight
-          ? LightManager.lightDefaults.blueLight
-          : LightManager.lightDefaults.yellowLight,
-        cloudStrength * ((sunbeamMaxLevel - cloudValue) * sunbeamStrength)
-      );
+      // light = Color.interpolate(
+      //   light,
+      //   isNight
+      //     ? LightManager.lightDefaults.blueLight
+      //     : LightManager.lightDefaults.yellowLight,
+      //   cloudStrength * ((sunbeamMaxLevel - cloudValue) * sunbeamStrength)
+      // );
     }
 
     if (highlight) {

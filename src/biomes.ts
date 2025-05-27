@@ -15,11 +15,13 @@ export const ImpassibleBorder: BiomeId[] = [
   "snowhillshillsmid",
 ];
 
+// high level terrain types used for first pass terrain generation
+export type BaseTerrainBiomeId = "ocean" | "moistdirt" | "sandydirt";
+
+// all biomes that are present in the game
 export type BiomeId =
-  | "ocean"
+  | BaseTerrainBiomeId
   | "beach"
-  | "moistdirt"
-  | "sandydirt"
   | "hillslow"
   | "hillsmid"
   | "hillshigh"
@@ -113,6 +115,20 @@ export class Biomes {
     return true;
   }
 
+  /***
+   * Shift the value to the min or max of the range
+   * if the value is outside the range
+   * @param value - the value to shift
+   * @param option - the range to shift to
+   * @returns the shifted value
+   * @example
+   * ```typescript
+   * const value = 0.04;
+   *  const option = { min: 0.2, max: 0.8 };
+   * const shiftedValue = shiftToBiome(value, option);
+   * console.log(shiftedValue); // 0.21
+   *
+   */
   public static shiftToBiome(value: number, option: GenerationOption): number {
     const threshold = 0.01;
     // if below the min, shift to the min
@@ -145,7 +161,7 @@ export class Biomes {
       id: "oceandeep",
       name: "Deep Ocean",
       description: "Deep and dark.",
-      baseTile: "biomes/oceandeep/oceandeep_ocean_47",
+      baseTile: "biomes/oceandeep/oceandeep_spring_ocean_47",
       autotilePrefix: "biomes/oceandeep/oceandeep_spring_ocean_",
       color: "#004db2",
       generationOptions: {

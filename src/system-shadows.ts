@@ -7,7 +7,8 @@ import { SystemTime } from "./system-time";
 import { SystemSunMoon } from "./system-sun-moon";
 
 // Height values used for shadow casting calculations
-export const HeightDropoff = {
+// the slope between layers is used to determine if a tile is shadowed or not
+export const HeightLayerFalloff = {
   Hole: 0.25,
   Valley: 0.5,
   SeaLevel: 0.7,
@@ -22,68 +23,73 @@ export const HeightDropoff = {
  */
 export class SystemShadows {
   // stores the current shadow values for visible tiles
-  public static shadowMap: number[] = [];
+  public static shadowMap: number[];
 
   // Shadow parameters
   // these get updated as time passes
   public static shadowStrength: number; // current shadow strength based on time, etc
-  public static ambientLightStrength: number;
   public static shadowLength: number; // current shadow length based on time, etc
 
-  // Shadow calculation constants
-  private static readonly BASE_SHADOW_LENGTH = 3;
-  private static readonly SHADOW_LENGTH_MULTIPLIER = 2;
-  private static readonly NIGHT_SHADOW_LENGTH_FACTOR = 0.5;
-  private static readonly NIGHT_SHADOW_STRENGTH_FACTOR = 0.8;
-
-  // for raycasting- slope from the light source to the shadowed tile
-  // these are used to determine if a tile is in shadow or not
-  private static readonly BASE_SLOPE_THRESHOLD = 0.015;
-  private static readonly SLOPE_THRESHOLD_RANGE = 0.05;
-  private static readonly SLOPE_MAX_THRESHOLD = 0.06;
-
-  // base shadow strength
-  // these don't change
+  // Cached shadow settings for performance
+  // - these reference the game settings
+  // - these do not change during runtime
+  private static minShadowLength: number; // minimum distance for ray tracing
   private static maxShadowLength: number; // maximum distance for ray tracing
   private static minShadowStrength: number; // minimum shadow strength. Used to calculate SystemShadows.shadowStrength
-  private static minShadowLength: number;
+  private static shadowLengthMultiplier: number;
+  private static nightShadowLengthFactor: number;
+  private static nightShadowStrengthFactor: number;
+  private static shadowStrengthMultiplier: number;
+  private static raytracingResolution: number; // step size for ray tracing
 
   // Sun positioning
-  private static shadowResolution: number; // step size for ray tracing
-
+  // private static raytracingResolution: number; // step size for ray tracing
   public static init() {
-    SystemShadows.minShadowStrength = 0.22; // Minimum shadow strength
-    SystemShadows.ambientLightStrength =
-      GameSettings.options.ambientLightStrength;
+    this.cacheSettings();
 
-    // Default values for shadow calculation
-    SystemShadows.shadowResolution = 1; // step size of 1 tile for ray tracing
-    SystemShadows.maxShadowLength = GameSettings.options.maxShadowLength;
-    SystemShadows.minShadowLength = GameSettings.options.minShadowLength;
-    SystemShadows.shadowMap = [];
-
-    // init shadow map and occlusion map with default values
+    // init shadow map with default values
+    this.shadowMap = [];
     const mapWidth = GameSettings.options.gameSize.width;
     const mapHeight = GameSettings.options.gameSize.height;
     let posIndex: number;
     for (let x = 0; x < mapWidth; x++) {
       for (let y = 0; y < mapHeight; y++) {
         posIndex = positionToIndex(x, y, Layer.TERRAIN);
-        SystemShadows.shadowMap[posIndex] = SystemShadows.ambientLightStrength;
+        this.shadowMap[posIndex] = 0; // 0 means no shadow
       }
     }
   }
 
+  private static cacheSettings() {
+    // cache options from GameSettings for performance
+
+    // step size of 1 tile for ray tracing (move 1 tile at a time when casting rays)
+    this.raytracingResolution =
+      GameSettings.options.shadows.raytracingResolution;
+    this.maxShadowLength = GameSettings.options.shadows.maxShadowLength;
+    this.minShadowLength = GameSettings.options.shadows.minShadowLength;
+    this.minShadowStrength = GameSettings.options.shadows.minShadowStrength;
+    this.shadowLengthMultiplier =
+      GameSettings.options.shadows.shadowLengthMultiplier;
+    this.nightShadowLengthFactor =
+      GameSettings.options.shadows.nightShadowLengthFactor;
+    this.nightShadowStrengthFactor =
+      GameSettings.options.shadows.nightShadowStrengthFactor;
+    this.shadowStrengthMultiplier =
+      GameSettings.options.shadows.shadowStrengthMultiplier;
+  }
+
   /**
-   * Update sun position based on time of day
+   * Update sun position and shadows based on time of day
    */
   public static turnUpdate(viewport: Viewport, map: MapWorld) {
     if (!GameSettings.options.toggles.enableSunShadows) return;
 
-    SystemShadows.calculateShadowProperties();
+    this.calculateShadowLength();
+    this.calculateShadowStrength();
 
     // Compute shadows for visible tiles
-    SystemShadows.updateShadowMap(viewport, map);
+    this.updateShadowMap(viewport, map);
   }
 
   /**
@@ -92,278 +98,124 @@ export class SystemShadows {
   private static updateShadowMap(viewport: Viewport, map: MapWorld) {
     if (!GameSettings.options.toggles.enableSunShadows) return;
 
-    // Convert 1D height map to 2D for the shadow computation algorithm
-    const heightMap = SystemShadows.createHeightMapForViewport(viewport, map);
-    if (!heightMap) return;
+    if (!this.shadowMap) return;
 
-    // Compute shadows using the ray-tracing algorithm
-    const shadowValues = SystemShadows.computeShadows(
-      heightMap,
-      SystemSunMoon.angle,
-      SystemShadows.shadowLength,
-      SystemShadows.shadowResolution
-    );
+    // Direction vectors for shadow casting
+    const shadowDx = -Math.cos(SystemSunMoon.angle);
+    const shadowDy = -Math.sin(SystemSunMoon.angle);
 
-    // Apply shadow values to the shadow map
+    // Process each tile in the viewport
     for (let i = 0; i < viewport.tiles.length; i++) {
       const posIndex = viewport.tiles[i];
-      const [x, y] = indexToXY(posIndex, Layer.TERRAIN);
+      const [tileX, tileY] = indexToXY(posIndex, Layer.TERRAIN);
 
-      // Convert to local viewport coordinates for accessing the shadowValues array
-      const localX = x - heightMap.viewportOffsetX;
-      const localY = y - heightMap.viewportOffsetY;
+      // Get falloff value for this position
+      const h0 = this.getFalloffAt(map, posIndex);
+      let shadowIntensity = 0;
+      let distance = this.raytracingResolution;
 
-      if (
-        localX >= 0 &&
-        localX < heightMap.width &&
-        localY >= 0 &&
-        localY < heightMap.height
-      ) {
-        // Map shadow value (0 or 1) to actual light value
-        const shadowValue = shadowValues[localY][localX];
+      // Cast rays in the shadow direction
+      while (distance < this.shadowLength) {
+        // Calculate position along ray
+        const rx = Math.floor(tileX + shadowDx * distance);
+        const ry = Math.floor(tileY + shadowDy * distance);
 
-        SystemShadows.shadowMap[posIndex] =
-          shadowValue === 1
-            ? SystemShadows.ambientLightStrength *
-              (1 - SystemShadows.shadowStrength)
-            : SystemShadows.ambientLightStrength;
+        // Skip if out of bounds
+        if (
+          rx < 0 ||
+          ry < 0 ||
+          rx >= GameSettings.options.gameSize.width ||
+          ry >= GameSettings.options.gameSize.height
+        )
+          break;
+
+        const rayPosIndex = positionToIndex(rx, ry, Layer.TERRAIN);
+        const h1 = this.getFalloffAt(map, rayPosIndex);
+
+        // Check if there's higher terrain along the ray path
+        // Check if there's higher terrain along the ray path
+        if (h1 > h0) {
+          // Calculate shadow intensity based on distance
+          // Closer blockages create darker shadows (closer to 1.0)
+          // Further blockages create lighter shadows (closer to 0.0)
+          const normalizedDistance = Math.min(distance / this.shadowLength, 1);
+
+          // Scale between 1.0 (closest) and 1.0 (furthest, change this to adjust shadow intensity)
+          // Linear scaling from dark to light based on distance
+          shadowIntensity = 1.0 - 1 * normalizedDistance;
+
+          break; // Stop ray casting once we find any higher terrain
+        }
+
+        distance += this.raytracingResolution;
       }
+
+      // Store shadow result as a value between 0 (no shadow) and 1 (full shadow)
+      this.shadowMap[posIndex] = shadowIntensity;
     }
   }
 
   /**
-   * Get height value for a specific position
+   * Get light falloff value for a specific position.
+   * y,x coordinates are used for access.
    */
-  private static getHeightValueAt(map: MapWorld, posIndex: number): number {
-    let heightValue = 0;
+  private static getFalloffAt(map: MapWorld, posIndex: number): number {
+    let falloffValue = 0;
     const heightLayer = map.heightLayerMap.get(posIndex);
     if (heightLayer) {
-      heightValue = HeightDropoff[heightLayer];
+      falloffValue = HeightLayerFalloff[heightLayer];
     } else {
-      // Use raw height value as fallback
-      heightValue = map.heightMap.get(posIndex) || 0;
+      // Use medium light falloff if no height layer is found
+      falloffValue = HeightLayerFalloff.MidHill;
     }
-    return heightValue;
-  }
-
-  /**
-   * Creates a generic height map for any map bounds
-   */
-  private static createHeightMap(
-    map: MapWorld,
-    bounds: { minX: number; minY: number; width: number; height: number }
-  ): number[][] {
-    const { minX, minY, width, height } = bounds;
-    const heightMap = Array(height)
-      .fill(0)
-      .map(() => Array(width).fill(0));
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const worldX = minX + x;
-        const worldY = minY + y;
-        const posIndex = positionToIndex(worldX, worldY, Layer.TERRAIN);
-
-        // Get height value for this position
-        heightMap[y][x] = this.getHeightValueAt(map, posIndex);
-      }
-    }
-
-    return heightMap;
-  }
-
-  /**
-   * Creates a 2D height map for the current viewport for shadow computation
-   */
-  private static createHeightMapForViewport(viewport: Viewport, map: MapWorld) {
-    if (!viewport) return;
-
-    // Calculate startX and startY from the center and dimensions
-    const startX = viewport.center.x - Math.floor(viewport.width / 2);
-    const startY = viewport.center.y - Math.floor(viewport.height / 2);
-
-    // Create height map using the generic method
-    const bounds = {
-      minX: startX,
-      minY: startY,
-      width: viewport.width,
-      height: viewport.height,
-    };
-
-    const heightMap = this.createHeightMap(map, bounds);
-
-    // Return the height map with metadata
-    return {
-      data: heightMap,
-      width: bounds.width,
-      height: bounds.height,
-      viewportOffsetX: startX,
-      viewportOffsetY: startY,
-    };
-  }
-
-  /**
-   * Calculate shadow properties based on current celestial state
-   */
-  private static calculateShadowProperties() {
-    this.calculateShadowLength();
-    this.calculateShadowStrength();
+    return falloffValue;
   }
 
   /**
    * Calculate shadow length based on sun elevation
    * Longer shadows when sun is closer to horizon
-   */
-  private static calculateShadowLength() {
+   */ private static calculateShadowLength() {
     // Calculate elevation factor - determines shadow length
     let elevationFactor = 1 - SystemSunMoon.elevation;
 
     // Calculate shadow distance
-    SystemShadows.shadowLength = Math.ceil(
-      this.BASE_SHADOW_LENGTH +
-        elevationFactor *
-          this.SHADOW_LENGTH_MULTIPLIER *
-          this.BASE_SHADOW_LENGTH
+    this.shadowLength = Math.ceil(
+      this.minShadowLength +
+        elevationFactor * this.shadowLengthMultiplier * this.minShadowLength
     );
 
     // Limit shadow length to reasonable bounds
-    SystemShadows.shadowLength = Math.max(
-      SystemShadows.minShadowLength,
-      Math.min(SystemShadows.shadowLength, SystemShadows.maxShadowLength)
+    this.shadowLength = Math.max(
+      this.minShadowLength,
+      Math.min(this.shadowLength, this.maxShadowLength)
     );
 
     if (!SystemTime.isDayTime) {
-      SystemShadows.shadowLength = Math.max(
-        SystemShadows.minShadowLength,
-        Math.floor(SystemShadows.shadowLength * this.NIGHT_SHADOW_LENGTH_FACTOR)
+      this.shadowLength = Math.max(
+        this.minShadowLength,
+        Math.floor(this.shadowLength * this.nightShadowLengthFactor)
       ); // Reduce length at night
     }
   }
-
   /**
    * Calculate shadow strength based on sun elevation
    * Stronger shadows when sun is closer to horizon
-   */
-  private static calculateShadowStrength() {
+   */ private static calculateShadowStrength() {
     // Strength varies inversely with sun elevation
-    let strengthFactor = 1 - SystemSunMoon.elevation;
+    let strength = 1 - SystemSunMoon.elevation;
 
     // Apply smooth easing to strength factor
-    const smoothStrengthFactor =
-      strengthFactor * strengthFactor * (3 - 2 * strengthFactor);
-    SystemShadows.shadowStrength =
-      SystemShadows.minShadowStrength + smoothStrengthFactor * 0.35;
+    strength = strength * strength * (3 - 2 * strength);
+
+    this.shadowStrength = Math.max(
+      this.minShadowStrength,
+      strength * this.shadowStrengthMultiplier
+    );
 
     if (!SystemTime.isDayTime) {
       // Moon shadows are typically more subtle
-      SystemShadows.shadowStrength *= this.NIGHT_SHADOW_STRENGTH_FACTOR;
+      this.shadowStrength *= this.nightShadowStrengthFactor;
     }
-  }
-
-  /**
-   * Compute shadow map using ray casting
-   * @param heightMapData 2D array of height values
-   * @param lightAngle Direction of light in radians
-   * @param shadowLength Maximum distance to cast rays
-   * @param resolution Step size for ray casting
-   * @returns 2D array of shadow values (1=shadowed, 0=lit)
-   */
-  private static computeShadows(
-    heightMapData: { data: number[][]; width: number; height: number },
-    lightAngle: number,
-    shadowLength: number,
-    resolution: number
-  ): number[][] {
-    // console.log("maxShadowDistance", shadowLength);
-    const { data: heightMap, width, height } = heightMapData;
-    const shadowMap: number[][] = Array(height)
-      .fill(0)
-      .map(() => Array(width).fill(0));
-
-    // Direction vectors - For a standard 2D coordinate system where +y is down on screen:
-    // With counterclockwise sun motion:
-    // Morning (180°/east): dx=-1, dy=0 → shadows cast to right (-dx, same dy)
-    // Noon (90°/north): dx=0, dy=-1 → shadows cast downward (same dx, -dy)
-    // Evening (0° or 360°/west): dx=1, dy=0 → shadows cast to left (-dx, same dy)
-    const dx = Math.cos(lightAngle);
-    const dy = Math.sin(lightAngle);
-
-    // For shadow rays, we cast in the opposite direction from the light source
-    const shadowDx = -dx;
-    const shadowDy = -dy;
-
-    // Debugging
-    // console.log(
-    //   `Sun angle: ${((lightAngle * 180) / Math.PI).toFixed(1)}°, ` +
-    //     `Light direction: dx=${dx.toFixed(2)}, dy=${dy.toFixed(2)}, ` +
-    //     `Shadow direction: dx=${shadowDx.toFixed(2)}, dy=${shadowDy.toFixed(2)}`
-    // );
-
-    // Set shadow detection parameters
-    const baseThreshold = SystemShadows.BASE_SLOPE_THRESHOLD;
-    const thresholdRange = SystemShadows.SLOPE_THRESHOLD_RANGE;
-
-    // Scale threshold with sun elevation
-    const slopeThreshold = Math.min(
-      baseThreshold + thresholdRange * SystemSunMoon.elevation,
-      SystemShadows.SLOPE_MAX_THRESHOLD
-    );
-    // const slopeThreshold = 0.06; // Fixed threshold for now
-
-    // Track how many height differences were encountered for debugging
-    let heightDiffsCount = 0;
-
-    // Compute shadows for each position
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const h0 = heightMap[y][x];
-        let shadowed = false;
-        let distance = resolution;
-
-        // Cast rays OPPOSITE to the light source direction (toward where shadows should go)
-        while (distance < shadowLength) {
-          // Calculate position along ray
-          const rx = Math.floor(x + shadowDx * distance);
-          const ry = Math.floor(y + shadowDy * distance);
-
-          // Check if we're still in bounds
-          if (rx < 0 || ry < 0 || rx >= width || ry >= height) break;
-
-          const h1 = heightMap[ry][rx];
-
-          // Check if there's higher terrain along the ray path
-          if (h1 > h0) {
-            heightDiffsCount++;
-
-            // Calculate slope from current point to the blocking terrain
-            const heightDiff = h1 - h0;
-            const slope = heightDiff / distance;
-
-            // If the slope exceeds our threshold, we're in shadow
-            if (slope > slopeThreshold) {
-              shadowed = true;
-              break;
-            }
-          }
-
-          distance += resolution;
-        }
-
-        // Store shadow result (1 = shadowed, 0 = lit)
-        shadowMap[y][x] = shadowed ? 1 : 0;
-      }
-    }
-
-    // Count and log the number of shadowed tiles for debugging
-    // const shadowedCount = shadowMap.flat().filter((v) => v === 1).length;
-    // console.log(
-    //   `Found ${heightDiffsCount} height differences resulting in ${shadowedCount} shadowed tiles (${(
-    //     (shadowedCount * 100) /
-    //     (width * height)
-    //   ).toFixed(1)}%)`
-    // );
-
-    return shadowMap;
   }
 
   /**
@@ -375,6 +227,6 @@ export class SystemShadows {
 
     // kind of a hack:
     // re-calculate the entire viewport shadows whenever a tile enters the viewport
-    SystemShadows.updateShadowMap(viewport, map);
+    this.updateShadowMap(viewport, map);
   }
 }

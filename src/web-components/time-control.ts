@@ -6,6 +6,7 @@ import { SlIconButton, SlRange } from "@shoelace-style/shoelace";
 import PauseIcon from "../shoelace/assets/icons/pause-fill.svg";
 import PlayIcon from "../shoelace/assets/icons/play-fill.svg";
 import { UtilityActions } from "./utility-actions";
+import { GameSettings } from "../game-settings";
 
 export class TimeControl extends HTMLElement {
   public timeDisplay: HTMLDivElement;
@@ -51,8 +52,7 @@ export class TimeControl extends HTMLElement {
 
     this.timeSlider = document.createElement("sl-range");
     this.timeSlider.setAttribute("min", "0");
-    this.timeSlider.setAttribute("max", "3");
-    this.timeSlider.setAttribute("step", "0.25");
+
     this.timeSlider.setAttribute("value", "1");
     this.timeSlider.setAttribute("tooltip", "bottom");
 
@@ -73,6 +73,16 @@ export class TimeControl extends HTMLElement {
 
     shadow.appendChild(container);
     this.setVisible(false);
+  }
+
+  public init(): void {
+    if (GameSettings.options.toggles.fasterTime) {
+      this.timeSlider.setAttribute("max", `${250}`);
+      this.timeSlider.setAttribute("step", `${1}`);
+    } else {
+      this.timeSlider.setAttribute("max", `${8}`);
+      this.timeSlider.setAttribute("step", `${0.5}`);
+    }
   }
 
   public updateTime(timeForDisplay: string): void {

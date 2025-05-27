@@ -92,7 +92,7 @@ export class Overlay extends HTMLElement {
         const canvas = overlay.canvas;
         const greyscaleMap = getData();
 
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (ctx === null) {
           return;
         }
@@ -136,7 +136,7 @@ export class Overlay extends HTMLElement {
         const canvas = overlay.canvas;
         const greyscaleMap = getData();
 
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (ctx === null) {
           return;
         }
@@ -204,7 +204,7 @@ export class Overlay extends HTMLElement {
       ...overlay,
       refreshData: () => {
         const canvas = overlay.canvas;
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (ctx === null) {
           return;
         }

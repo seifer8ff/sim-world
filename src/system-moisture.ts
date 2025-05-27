@@ -1,5 +1,3 @@
-import { Game } from "./game";
-import Simplex from "rot-js/lib/noise/simplex";
 import { lerp, positionToIndex } from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { Biomes } from "./biomes";
@@ -37,33 +35,27 @@ export const MoistureZoneMap = {
   },
 };
 
-export class MapMoisture {
-  public moistureMap: Map<number, number>;
-  public scale: number;
+export class SystemMoisture {
+  public static moistureMap: Map<number, number>;
+  public static scale: number;
 
-  constructor(private game: Game, private map: MapWorld) {
+  public static init() {
     this.moistureMap = new Map();
     this.scale = 1;
   }
 
-  public init() {
-    this.moistureMap = new Map();
-  }
-
-  public generateMoistureFor(
+  public static generate(
     x: number,
     y: number,
     width: number,
     height: number,
-    noise: Noise
+    noise: Noise,
+    map: MapWorld
   ): number {
     const index = positionToIndex(x, y, Layer.TERRAIN);
-    const nearWater = this.map.isAdjacentToBiome(
-      x,
-      y,
-      this.map.terrainAdjacencyD2Map,
-      [Biomes.Biomes.ocean.id]
-    );
+    const nearWater = map.isAdjacentToBiome(x, y, map.terrainAdjacencyD2Map, [
+      Biomes.Biomes.ocean.id,
+    ]);
 
     let noiseX = x / width - 0.5;
     let noiseY = y / height - 0.5;
@@ -83,21 +75,21 @@ export class MapMoisture {
     return this.moistureMap.get(index);
   }
 
-  setMoisture(x: number, y: number, temp: number): void {
+  public static set(x: number, y: number, temp: number): void {
     this.moistureMap.set(positionToIndex(x, y, Layer.TERRAIN), temp);
   }
 
-  getMoisture(x: number, y: number): number {
-    return this.moistureMap.get(positionToIndex(x, y, Layer.TERRAIN));
+  public static get(x: number, y: number): number {
+    return this.moistureMap?.get(positionToIndex(x, y, Layer.TERRAIN));
   }
 
-  getMoistureByIndex(index: number): number {
-    return this.moistureMap.get(index);
+  public static getByIndex(index: number): number {
+    return this.moistureMap?.get(index);
   }
 
-  getMoistureDescription(x: number, y: number): MoistureZones {
-    const index = positionToIndex(x, y, Layer.TERRAIN);
-    const moistureLevel = this.moistureMap.get(index);
+  public static getDescriptionForMoisture(
+    moistureLevel: number
+  ): MoistureZones {
     for (let climate in MoistureZoneMap) {
       const range = MoistureZoneMap[climate];
       if (moistureLevel >= range.min && moistureLevel <= range.max) {
