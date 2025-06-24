@@ -150,6 +150,7 @@ export class MapWorld {
   }
 
   generateMap(width: number, height: number): void {
+    console.log(`generating map of size ${width}x${height}`);
     this.tileMap = [];
     this.biomeMap = new Map();
     this.heightMap = new Map();
@@ -160,7 +161,7 @@ export class MapWorld {
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         index = positionToIndex(x, y, Layer.TERRAIN);
-        SystemPoles.generateMagnetism(x, y, width, height, this.game.noise);
+        SystemPoles.generate(x, y, width, height, this.game.noise);
         this.heightMap.set(
           index,
           this.getHeight(x, y, width, height, this.game.noise)
@@ -200,37 +201,34 @@ export class MapWorld {
       }
     }
 
-    const stats = getMapStats(
-      Array.from(SystemTemperature.getBaseMap().values()),
-      [
-        { label: "over90", threshold: 0.9 },
-        { label: "over80", threshold: 0.8 },
-        { label: "over70", threshold: 0.7 },
-        { label: "over55", threshold: 0.55 },
-        { label: "over32", threshold: 0.32 },
-        {
-          label: "under55",
-          threshold: 0.55,
-          isNegative: true,
-        },
-        {
-          label: "under32",
-          threshold: 0.32,
-          isNegative: true,
-        },
-        {
-          label: "under15",
-          threshold: 0.15,
-          isNegative: true,
-        },
-        {
-          label: "under0",
-          threshold: 0,
-          isNegative: true,
-        },
-      ]
-    );
-    console.log("temp map", stats);
+    const stats = getMapStats(Array.from(SystemTemperature.all.values()), [
+      { label: "over90", threshold: 0.9 },
+      { label: "over80", threshold: 0.8 },
+      { label: "over70", threshold: 0.7 },
+      { label: "over55", threshold: 0.55 },
+      { label: "over32", threshold: 0.32 },
+      {
+        label: "under55",
+        threshold: 0.55,
+        isNegative: true,
+      },
+      {
+        label: "under32",
+        threshold: 0.32,
+        isNegative: true,
+      },
+      {
+        label: "under15",
+        threshold: 0.15,
+        isNegative: true,
+      },
+      {
+        label: "under0",
+        threshold: 0,
+        isNegative: true,
+      },
+    ]);
+    console.log("Base Temperature range:", stats);
     // assign biome map using climate maps
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
@@ -274,14 +272,6 @@ export class MapWorld {
     this.regenerateAdjacencyMap("biome");
     this.regenerateAdjacencyMap("height");
     this.regenerateAdjacencyMap("heightLayer");
-    // console.log("cloudMap", this.cloudMap.cloudMap);
-    // console.log("moistureMap", this.moistureMap.moistureMap);
-    if (GameSettings.options.toggles.enableOcclusionShadows) {
-      SystemOcclusion.init();
-    }
-    if (GameSettings.options.toggles.enableSunShadows) {
-      SystemShadows.init(); // Initialize the shadows with the real-time approach
-    }
 
     // finally, generate the tile map
     if (GameSettings.options.toggles.enableAutotile) {
@@ -497,8 +487,8 @@ export class MapWorld {
 
   private shiftTemperature(x: number, y: number, newBiomeId: BiomeId) {
     const newBiome = Biomes.Biomes[newBiomeId];
-    const temp = SystemTemperature.get(x, y);
-    SystemTemperature.set(
+    const temp = SystemTemperature.at(x, y);
+    SystemTemperature.setAt(
       x,
       y,
       Biomes.shiftToBiome(temp, newBiome.generationOptions.temperature)
@@ -507,8 +497,8 @@ export class MapWorld {
 
   private shiftMoisture(x: number, y: number, newBiomeId: BiomeId) {
     const newBiome = Biomes.Biomes[newBiomeId];
-    const moisture = SystemMoisture.get(x, y);
-    SystemMoisture.set(
+    const moisture = SystemMoisture.at(x, y);
+    SystemMoisture.setAt(
       x,
       y,
       Biomes.shiftToBiome(moisture, newBiome.generationOptions.moisture)
@@ -523,8 +513,8 @@ export class MapWorld {
     ];
     const maps = {
       height: this.heightMap,
-      temperature: SystemTemperature.getBaseMap(),
-      moisture: SystemMoisture.moistureMap,
+      temperature: SystemTemperature.all,
+      moisture: SystemMoisture.baseMoistureMap,
     };
     if (biomeId == Biomes.Biomes.hillsmid.id) {
       if (
@@ -569,8 +559,8 @@ export class MapWorld {
     const index = positionToIndex(x, y, Layer.TERRAIN);
     const terrain = this.terrainMap.get(index);
     const height = this.heightMap.get(index);
-    const temp = SystemTemperature.getByIndex(index);
-    const moisture = SystemMoisture.get(x, y);
+    const temp = SystemTemperature.atIndex(index);
+    const moisture = SystemMoisture.at(x, y);
     const biomeId = this.biomeMap.get(index);
     const adjacentBiomes = this.biomeAdjacencyD2Map[index];
 
@@ -813,7 +803,16 @@ export class MapWorld {
     return false;
   }
 
-  getAdjacent(x: number, y: number, adjacencyMap: any[][]): any[] {
+  isWater(x: number, y: number): boolean {
+    const index = positionToIndex(x, y, Layer.TERRAIN);
+    const terrain = this.terrainMap.get(index);
+    return (
+      terrain === Biomes.Biomes.ocean.id ||
+      terrain === Biomes.Biomes.oceandeep.id
+    );
+  }
+
+  static getAdjacent(x: number, y: number, adjacencyMap: any[][]): any[] {
     return adjacencyMap[positionToIndex(x, y, Layer.TERRAIN)];
   }
 
@@ -837,8 +836,8 @@ export class MapWorld {
     const terrain = this.terrainMap.get(positionToIndex(x, y, Layer.TERRAIN));
     const maps = {
       height: this.heightMap,
-      temperature: SystemTemperature.getBaseMap(),
-      moisture: SystemMoisture.moistureMap,
+      temperature: SystemTemperature.all,
+      moisture: SystemMoisture.baseMoistureMap,
     };
 
     if (terrain === Biomes.Biomes.ocean.id) {
@@ -1027,134 +1026,6 @@ export class MapWorld {
     return RNG.shuffle(result).slice(0, quantity);
   }
 
-  // getRandomTilePositions(
-  //   biomeTypes: BiomeId[],
-  //   quantity: number = 1,
-  //   unblockedOnly = true,
-  //   isDenseLayer: boolean = false,
-  //   maxAttempts: number = 10000
-  // ): Point[] {
-  //   let result: Point[] = [];
-  //   let randPos: Point;
-  //   const desiredBiomesSet = new Set(biomeTypes);
-  //   let attempts = 0;
-
-  //   // loop until we have enough results, or we've tried too many times
-  //   while (result.length < quantity && attempts < maxAttempts) {
-  //     // get a random dense tile point
-  //     randPos = new Point(
-  //       Math.floor(
-  //         Math.random() *
-  //           GameSettings.options.gameSize.width *
-  //           Tile.tileDensityRatio
-  //       ),
-  //       Math.floor(
-  //         Math.random() *
-  //           GameSettings.options.gameSize.height *
-  //           Tile.tileDensityRatio
-  //       )
-  //     );
-
-  //     // used for biome checks
-  //     const nonDensePos = Tile.translatePoint(
-  //       randPos,
-  //       Layer.SMALLACTOR,
-  //       Layer.TERRAIN
-  //     );
-
-  //     // check if the position is valid
-  //     if (
-  //       desiredBiomesSet.has(this.getBiome(nonDensePos.x, nonDensePos.y)?.id)
-  //     ) {
-  //       if (
-  //         unblockedOnly &&
-  //         !this.game.collisionManager.isBlocked(
-  //           randPos.x,
-  //           randPos.y,
-  //           Layer.SMALLACTOR
-  //         )
-  //       ) {
-  //         result.push(isDenseLayer ? randPos : nonDensePos);
-  //       } else if (!unblockedOnly) {
-  //         result.push(isDenseLayer ? randPos : nonDensePos);
-  //       }
-  //     }
-  //     attempts++;
-  //   }
-  //   return RNG.shuffle(result).slice(0, quantity);
-  // }
-
-  // getRandomTilePositions(
-  //   biomeTypes: BiomeId[],
-  //   quantity: number = 1,
-  //   unblockedOnly = true,
-  //   isDenseLayer: boolean = false,
-  //   maxAttempts: number = 1000
-  // ): Point[] {
-  //   let result: Point[] = [];
-  //   let randPos: Point;
-  //   let translatedPos: Point;
-  //   const desiredBiomesSet = new Set(biomeTypes);
-  //   let attempts = 0;
-
-  //   // loop until we have enough results, or we've tried too many times
-  //   while (result.length < quantity && attempts < maxAttempts) {
-  //     // get a random point
-  //     randPos = new Point(
-  //       Math.floor(Math.random() * GameSettings.options.gameSize.width),
-  //       Math.floor(Math.random() * GameSettings.options.gameSize.height)
-  //     );
-
-  //     // check if the position is valid
-  //     // repeat if the position isn't valid
-  //     if (desiredBiomesSet.has(this.getBiome(randPos.x, randPos.y).id)) {
-  //       if (isDenseLayer) {
-  //         // convert everything to a dense tile position
-  //         translatedPos = Tile.translatePoint(
-  //           randPos,
-  //           Layer.TERRAIN,
-  //           Layer.SMALLACTOR
-  //         );
-  //         //check each dense tile position
-  //         for (let x = 0; x < Tile.tileDensityRatio; x++) {
-  //           for (let y = 0; y < Tile.tileDensityRatio; y++) {
-  //             // check collision
-  //             if (
-  //               unblockedOnly &&
-  //               !this.game.collisionManager.isBlocked(
-  //                 translatedPos.x,
-  //                 translatedPos.y,
-  //                 Layer.SMALLACTOR
-  //               )
-  //             ) {
-  //               result.push(
-  //                 new Point(translatedPos.x + x, translatedPos.y + y)
-  //               );
-  //               // no need to check for collision
-  //             } else if (!unblockedOnly) {
-  //               result.push(
-  //                 new Point(translatedPos.x + x, translatedPos.y + y)
-  //               );
-  //             }
-  //           }
-  //         }
-  //       } else {
-  //         // non-dense layer, just add the position if valid
-  //         if (
-  //           unblockedOnly &&
-  //           !this.game.collisionManager.isBlocked(randPos.x, randPos.y)
-  //         ) {
-  //           result.push(randPos);
-  //         } else if (!unblockedOnly) {
-  //           result.push(randPos);
-  //         }
-  //       }
-  //     }
-  //     attempts++;
-  //   }
-  //   return RNG.shuffle(result).slice(0, quantity);
-  // }
-
   getTile(x: number, y: number): number {
     const tileId = this.tileMap[positionToIndex(x, y, Layer.TERRAIN)];
     return tileId;
@@ -1192,71 +1063,21 @@ export class MapWorld {
     const index = positionToIndex(x, y, Layer.TERRAIN);
     return {
       height: this.heightMap.get(index),
-      magnetism: SystemPoles.magnetismMap.get(index),
-      temperaturePercent: SystemTemperature.getByIndex(index),
-      moisture: SystemMoisture.getByIndex(index),
-      sunlight: this.getTotalLight(x, y),
+      magnetism: SystemPoles.atIndex(index),
+      temperaturePercent: SystemTemperature.atIndex(index),
+      moisture: SystemMoisture.atIndex(index),
+      sunlight: this.lightManager.getTotalLight(x, y),
       biome: Biomes.Biomes[this.biomeMap.get(index)],
     };
   }
 
-  getTotalLight(x: number, y: number): number {
-    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
-    // console.throttle(250).log("lightFromClouds", lightFromClouds, cloudLevel);
-    let totalLight = 1;
-    if (GameSettings.options.toggles.enableGlobalLights) {
-      totalLight = SystemTime.remainingPhasePercent;
-    }
-
-    if (GameSettings.options.toggles.enableOcclusionShadows) {
-      const occlusionAmount = SystemOcclusion.occlusionMap[posIndex];
-      const isOccluded = occlusionAmount > 0;
-      if (isOccluded) {
-        // console.log("occlusionAmount", occlusionAmount);
-        totalLight *= 1 - occlusionAmount * SystemOcclusion.strengthMultiplier;
-      }
-    }
-
-    if (GameSettings.options.toggles.enableSunShadows) {
-      const shadowAmount = SystemShadows.shadowMap[posIndex];
-      const isShadowed = shadowAmount > 0;
-      if (isShadowed) {
-        // console.log("shadowAmount", shadowAmount);
-        totalLight *= 1 - shadowAmount * SystemShadows.shadowStrength;
-      }
-    }
-    // if (isShadowed) {
-    //   totalLight *= shadowAmount;
-    // }
-
-    if (GameSettings.options.toggles.enableClouds) {
-      let cloudAmount = SystemClouds.get(posIndex);
-      cloudAmount -= SystemClouds.cloudMinLevel;
-      const isCloudy = cloudAmount > 0;
-      if (isCloudy) {
-        // console.log("cloudAmount", cloudAmount);
-        totalLight *= 1 - cloudAmount * SystemClouds.cloudStrength;
-      }
-    }
-    // can go over 1 due to lightening effect from sunbeams/clouds
-    if (totalLight < 0) {
-      totalLight = 0;
-    }
-    if (totalLight > 1) {
-      totalLight = 1;
-    }
-    return totalLight;
-  }
-
-  onTileEnterViewport(viewport: Viewport, updateTileIndexes: number[]): void {
-    if (this.ready) {
-      SystemOcclusion.onEnter(this, updateTileIndexes);
-      SystemShadows.onEnter(viewport, this);
-      SystemClouds.onEnter(updateTileIndexes, this);
-      this.lightManager.onEnter(updateTileIndexes);
-      // TODO: add a step to render tile
-      // this will fix shadows not updating immediately when panning
-    }
+  isTileInMap(tileX: number, tileY: number): boolean {
+    return (
+      tileX >= 0 &&
+      tileX < GameSettings.options.gameSize.width &&
+      tileY >= 0 &&
+      tileY < GameSettings.options.gameSize.height
+    );
   }
 
   isPointInMap(point: Point): boolean {

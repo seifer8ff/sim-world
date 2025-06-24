@@ -4,7 +4,7 @@ import { Renderer } from "./renderer";
 import { Camera, Viewport } from "./camera";
 import { LightManager, RGBAColor } from "./light-manager";
 import { Color as ColorType } from "rot-js/lib/color";
-import { AnimatedSprite, Texture } from "pixi.js";
+import { AnimatedSprite, DisplayObject, Texture } from "pixi.js";
 import { GameSettings } from "./game-settings";
 import { BaseAnimationKey } from "./components/animation-map";
 import { Tile } from "./tile";
@@ -40,7 +40,11 @@ export class SystemAnimated {
         continue;
       }
       tint = lightManager.getLightFor(position.x, position.y, false, true);
-      renderer.renderDisplayObject(sprite, layer, tint as ColorType);
+      renderer.renderDisplayObject(
+        sprite as DisplayObject,
+        layer,
+        tint as ColorType
+      );
     }
   }
 

@@ -10,9 +10,9 @@ export class GameState {
   stage: Stages;
   // loading is set to true whenever stage is changed.
   // once loading is complete, it's set to false.
-  loading: boolean;
+  loading: boolean; // indicates if scene is fully loaded, including systems/map and UI
   loadingPercent: number;
-  worldSetupComplete: boolean;
+  worldSetupComplete: boolean; // indicates if map and entity generation is complete
 
   constructor() {
     this.reset();

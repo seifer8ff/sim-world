@@ -118,6 +118,113 @@ export class Overlay extends HTMLElement {
     this.displayOverlays.push(overlayWithRefresh);
   }
 
+  public generateOverlayFromArray(
+    width: number,
+    height: number,
+    label: string = "Greyscale Overlay",
+    getData: () => Float32Array
+  ) {
+    const overlay = this.generateOverlayContainer(label, width, height);
+
+    const overlayWithRefresh = {
+      ...overlay,
+      refreshData: () => {
+        const canvas = overlay.canvas;
+        const greyscaleMap = getData();
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx === null) {
+          return;
+        }
+        const imageData = ctx.createImageData(canvas.width, canvas.height);
+        const data = imageData.data;
+        let index = -1;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const x = (i / 4) % canvas.width;
+          const y = Math.floor(i / 4 / canvas.width);
+          index = positionToIndex(x, y, Layer.TERRAIN);
+          const value = greyscaleMap[index] * 255;
+          data[i] = value;
+          data[i + 1] = value;
+          data[i + 2] = value;
+          data[i + 3] = 255;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+      },
+    };
+    this.overlays.push(overlayWithRefresh);
+    this.displayOverlays.push(overlayWithRefresh);
+  }
+
+  public generateGradientOverlayFromArray(
+    width: number,
+    height: number,
+    label: string = "Greyscale Overlay",
+    gradient: {
+      min: "red" | "green" | "blue";
+      max: "red" | "green" | "blue";
+    },
+    getData: () => Float32Array
+  ) {
+    const overlay = this.generateOverlayContainer(label, width, height);
+
+    const overlayWithRefresh = {
+      ...overlay,
+      refreshData: () => {
+        const canvas = overlay.canvas;
+        const greyscaleMap = getData();
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx === null) {
+          return;
+        }
+        const imageData = ctx.createImageData(canvas.width, canvas.height);
+        const data = imageData.data;
+        let index = -1;
+        let value = 0;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const x = (i / 4) % canvas.width;
+          const y = Math.floor(i / 4 / canvas.width);
+          index = positionToIndex(x, y, Layer.TERRAIN);
+          value = greyscaleMap[index];
+          let red = 0;
+          let green = 0;
+          let blue = 0;
+          if (gradient.min === "red") {
+            red = (1 - value) * 255;
+          }
+          if (gradient.min === "green") {
+            green = (1 - value) * 255;
+          }
+          if (gradient.min === "blue") {
+            blue = (1 - value) * 255;
+          }
+          if (gradient.max === "red") {
+            red = value * 255;
+          }
+          if (gradient.max === "green") {
+            green = value * 255;
+          }
+          if (gradient.max === "blue") {
+            blue = value * 255;
+          }
+          data[i] = red; // Red
+          data[i + 1] = green; // Green
+          data[i + 2] = blue; // Blue
+          data[i + 3] = 255; // Alpha
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+      },
+    };
+    this.overlays.push(overlayWithRefresh);
+    this.displayOverlays.push(overlayWithRefresh);
+    return overlayWithRefresh;
+  }
+
   public generateGradientOverlay(
     width: number,
     height: number,

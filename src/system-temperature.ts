@@ -1,11 +1,5 @@
-import {
-  lerp,
-  normalize,
-  normalizeNoise,
-  positionToIndex,
-} from "./misc-utility";
+import { normalize, normalizeNoise, positionToIndex } from "./misc-utility";
 import { MapWorld } from "./map-world";
-import { Biomes } from "./biomes";
 import Noise from "rot-js/lib/noise/noise";
 import { Layer } from "./renderer";
 import { SystemPoles } from "./system-poles";
@@ -14,6 +8,13 @@ import { SystemShadows } from "./system-shadows";
 import { SystemOcclusion } from "./system-occlusion";
 import { GameSettings } from "./game-settings";
 import { SystemClouds } from "./system-clouds";
+import {
+  GenerationModifiers,
+  GenerationSettings,
+  SystemSettings,
+} from "./system";
+import { Game } from "./game";
+import { Tile } from "./tile";
 
 export enum Climates {
   Scorching = "Scorching",
@@ -51,13 +52,27 @@ export const TempMap = {
   },
 };
 
-export interface TemperatureSettings {
-  modifiers: TemperatureModifiers;
-  noiseGeneration: TemperatureNoiseGenerationSettings;
+export interface TemperatureUpdateSettings {
+  interval: number;
+  historyLength: number;
+}
+
+export interface TemperatureSettings extends SystemSettings {
+  generationModifiers: TemperatureGenerationModifiers;
+  generationSettings: TemperatureGenerationSettings;
   updateSettings: TemperatureUpdateSettings;
 }
 
-export interface TemperatureModifiers {
+export interface TemperatureGenerationSettings extends GenerationSettings {
+  baseScale: number;
+  secondaryScale: number;
+  tertiaryScale: number;
+  baseWeight: number;
+  secondaryWeight: number;
+  tertiaryWeight: number;
+}
+
+export interface TemperatureGenerationModifiers extends GenerationModifiers {
   baseTemperature: number;
   magnetismModifier: number;
   heightModifier: number;
@@ -72,47 +87,40 @@ export interface TemperatureModifiers {
   winterModifier: number;
 }
 
-export interface TemperatureNoiseGenerationSettings {
-  baseScale: number;
-  secondaryScale: number;
-  tertiaryScale: number;
-  baseWeight: number;
-  secondaryWeight: number;
-  tertiaryWeight: number;
-}
-
-export interface TemperatureUpdateSettings {
-  interval: number;
-  historyLength: number;
-}
-
-export class SystemTemperature {
-  private static baseTemperatureMap: Map<number, number>;
-  private static temperatureMap: Map<number, number>; // Cache for adjusted temperatures
-  private static temperatureHistory: Map<number, number[]>; // Store recent temperatures
+export class SystemTemperatureImplementation {
+  private baseTemperatureMap: Float32Array;
+  private temperatureMap: Float32Array; // Cache for adjusted temperatures
+  private temperatureHistory: Map<number, number[]>; // Store recent temperatures
 
   // Cache of settings for performance
-  private static modifiers: TemperatureModifiers;
-  private static generationSettings: TemperatureNoiseGenerationSettings;
-  private static updateSettings: TemperatureUpdateSettings;
+  private modifiers: TemperatureGenerationModifiers;
+  private generationSettings: TemperatureGenerationSettings;
+  private updateSettings: TemperatureUpdateSettings;
+  private mapWidth: number;
+  private mapHeight: number;
 
-  public static init() {
-    this.baseTemperatureMap = new Map();
-    this.temperatureMap = new Map();
+  public init(
+    settings: TemperatureGenerationSettings,
+    modifiers: TemperatureGenerationModifiers,
+    updateSettings: TemperatureUpdateSettings,
+    mapWidth: number,
+    mapHeight: number
+  ) {
+    this.mapWidth = mapWidth;
+    this.mapHeight = mapHeight;
+    this.baseTemperatureMap = new Float32Array(
+      mapWidth * mapHeight * Tile.tileDensityRatio
+    );
+    this.temperatureMap = new Float32Array(
+      mapWidth * mapHeight * Tile.tileDensityRatio
+    );
     this.temperatureHistory = new Map();
-    this.cacheSettings();
+    this.modifiers = modifiers;
+    this.generationSettings = settings;
+    this.updateSettings = updateSettings;
   }
 
-  /**
-   * Cache settings from GameSettings for performance
-   */
-  private static cacheSettings() {
-    this.modifiers = GameSettings.options.temperature.modifiers;
-    this.generationSettings = GameSettings.options.temperature.noiseGeneration;
-    this.updateSettings = GameSettings.options.temperature.updateSettings;
-  }
-
-  public static generate(
+  public generate(
     x: number,
     y: number,
     width: number,
@@ -123,7 +131,7 @@ export class SystemTemperature {
     const index = positionToIndex(x, y, Layer.TERRAIN);
     const terrainHeight = map.heightMap.get(index);
     const terrainAboveSeaLevel = terrainHeight - map.seaLevel;
-    const magnetism = SystemPoles.get(x, y);
+    const magnetism = SystemPoles.at(x, y);
     const noiseLayerOffset = 1000000; // offset to ensure noise layers are unique
 
     const noiseX = x / width;
@@ -165,6 +173,8 @@ export class SystemTemperature {
       this.generationSettings.tertiaryWeight;
     noiseValue = noiseValue / weightSum;
 
+    noiseValue = normalizeNoise(noiseValue);
+
     let heightModifier = terrainAboveSeaLevel >= 0 ? terrainAboveSeaLevel : 0;
     heightModifier = heightModifier / (1 - map.seaLevel); // normalize to 0-1 range
     noiseValue -= heightModifier * this.modifiers.heightModifier; // apply height modifier to temperature
@@ -173,17 +183,15 @@ export class SystemTemperature {
     noiseValue -= magnetism * this.modifiers.magnetismModifier;
 
     // apply a final normalization to ensure the value is between 0 and 1
-    noiseValue = normalizeNoise(noiseValue);
-    this.baseTemperatureMap.set(index, noiseValue);
+    noiseValue = normalize(noiseValue);
+    this.baseTemperatureMap[index] = noiseValue; // Store the base temperature
 
-    //
     // Calculate and store the fully adjusted temperature
     const adjustedTemp = this.calculateAdjustedTemp(noiseValue, index);
-    this.temperatureMap.set(index, adjustedTemp);
+    this.temperatureMap[index] = adjustedTemp;
 
     // Record temperature history
     this.recordTemperatureHistory(index, adjustedTemp);
-    //
 
     return noiseValue;
   }
@@ -191,7 +199,7 @@ export class SystemTemperature {
   /**
    * Update temperatures on turn progression
    */
-  public static turnUpdate(): void {
+  public turnUpdate(): void {
     if (SystemTime.currentTurn % this.updateSettings.interval === 0) {
       // Time to do a full temperature update
       this.updateTemperatures();
@@ -199,39 +207,40 @@ export class SystemTemperature {
   }
 
   // Update all temperatures at once
-  private static updateTemperatures(): void {
-    this.baseTemperatureMap.forEach((baseTemp, index) => {
-      // Calculate current temperature
-      const currentAdjusted = this.calculateAdjustedTemp(baseTemp, index);
+  private updateTemperatures(): void {
+    for (let i = 0; i < this.mapWidth; i++) {
+      for (let j = 0; j < this.mapHeight; j++) {
+        const index = positionToIndex(i, j, Layer.TERRAIN);
+        // Calculate current temperature
+        const baseTemp = this.baseTemperatureMap[index];
+        const currentAdjusted = this.calculateAdjustedTemp(baseTemp, index);
 
-      // Record to history
-      this.recordTemperatureHistory(index, currentAdjusted);
+        // Record to history
+        this.recordTemperatureHistory(index, currentAdjusted);
 
-      // Calculate averaged temperature
-      const history = this.temperatureHistory.get(index) || [currentAdjusted];
-      const avgTemp =
-        history.reduce((sum, temp) => sum + temp, 0) / history.length;
+        // Calculate averaged temperature
+        const history = this.temperatureHistory.get(index) || [currentAdjusted];
+        const avgTemp =
+          history.reduce((sum, temp) => sum + temp, 0) / history.length;
 
-      // Store the adjusted temperature directly
-      this.temperatureMap.set(index, avgTemp);
-    });
+        // Store the adjusted temperature directly
+        // this.temperatureMap.set(index, avgTemp);
+        this.temperatureMap[index] = avgTemp;
+      }
+    }
   }
 
   /**
-   * Separately calculate temperature without updating state
-   * This helps decouple from cloud and shadow systems
+   * Calculate the final temperature based on base temperature and environmental factors
    */
-  private static calculateAdjustedTemp(
-    baseTemp: number,
-    index: number
-  ): number {
+  private calculateAdjustedTemp(baseTemp: number, index: number): number {
     // Apply time-based modifiers
     const timeModifier = SystemTime.isDayTime
-      ? this.calculateDaytimeModifier()
-      : this.calculateNighttimeModifier();
+      ? this.applyDaytimeModifier()
+      : this.applyNighttimeModifier();
 
     // Apply seasonal modifiers
-    const seasonModifier = this.calculateSeasonModifier();
+    const seasonModifier = this.applySeasonModifier();
 
     // Calculate the adjusted temperature
     let adjustedTemp = baseTemp + timeModifier + seasonModifier;
@@ -245,17 +254,14 @@ export class SystemTemperature {
 
   /**
    * Apply environmental effects to temperature
-   * This separates the effects for better decoupling
+   * including shadows, occlusion, and clouds
    */
-  private static applyEnvironmentalEffects(
-    temp: number,
-    index: number
-  ): number {
+  private applyEnvironmentalEffects(temp: number, index: number): number {
     let adjustedTemp = temp;
 
     // Apply shadow effects - shadows cool areas
-    if (GameSettings.options.toggles.enableSunShadows) {
-      const shadowValue = SystemShadows.shadowMap[index];
+    if (GameSettings.options.toggles.enableSunShadows && SystemShadows.all) {
+      const shadowValue = SystemShadows.all[index];
       if (shadowValue > 0) {
         adjustedTemp -=
           shadowValue *
@@ -266,7 +272,7 @@ export class SystemTemperature {
 
     // Apply occlusion effects - valleys and areas between hills are cooler
     if (GameSettings.options.toggles.enableOcclusionShadows) {
-      const occlusionValue = SystemOcclusion.occlusionMap[index];
+      let occlusionValue = SystemOcclusion.atIndex(index);
       if (occlusionValue > 0) {
         adjustedTemp -=
           occlusionValue *
@@ -277,10 +283,10 @@ export class SystemTemperature {
 
     // Apply cloud effects - clouded areas are cooler
     if (GameSettings.options.toggles.enableClouds) {
-      let cloudValue = SystemClouds.get(index);
+      let cloudValue = SystemClouds.atIndex(index);
       cloudValue -= SystemClouds.cloudMinLevel;
       if (cloudValue > 0) {
-        adjustedTemp -=
+        adjustedTemp +=
           cloudValue *
           SystemClouds.cloudStrength *
           this.modifiers.cloudShadowModifier;
@@ -293,10 +299,7 @@ export class SystemTemperature {
   /**
    * Record temperature in history for averaging
    */
-  private static recordTemperatureHistory(
-    index: number,
-    temperature: number
-  ): void {
+  private recordTemperatureHistory(index: number, temperature: number): void {
     if (!this.temperatureHistory.has(index)) {
       this.temperatureHistory.set(index, []);
     }
@@ -314,7 +317,7 @@ export class SystemTemperature {
    * Calculate temperature modifier based on time of day during daylight
    * Morning: cooler → Mid-day: warmest → Evening: cooling down
    */
-  private static calculateDaytimeModifier(): number {
+  private applyDaytimeModifier(): number {
     const dayProgress = 1 - SystemTime.remainingCyclePercent;
 
     // Warmest at mid-day (bell curve)
@@ -329,7 +332,7 @@ export class SystemTemperature {
    * Calculate temperature modifier for nighttime
    * Temperature decreases throughout the night, coldest before dawn
    */
-  private static calculateNighttimeModifier(): number {
+  private applyNighttimeModifier(): number {
     const nightProgress = 1 - SystemTime.remainingCyclePercent;
 
     // Get colder as night progresses, coldest at end of night (before dawn)
@@ -342,7 +345,7 @@ export class SystemTemperature {
   /**
    * Calculate temperature modifier based on current season
    */
-  private static calculateSeasonModifier(): number {
+  private applySeasonModifier(): number {
     switch (SystemTime.season) {
       case Season.Summer:
         return this.modifiers.summerModifier;
@@ -357,41 +360,87 @@ export class SystemTemperature {
     }
   }
 
-  public static getBaseMap(): Map<number, number> {
-    return this.baseTemperatureMap; // Return the original map, for terrain gen
-  }
-
-  public static getMap(): Map<number, number> {
+  public getAll(): Float32Array {
     return this.temperatureMap;
   }
 
-  public static get(x: number, y: number): number {
+  public getPosition(x: number, y: number): number {
     const index = positionToIndex(x, y, Layer.TERRAIN);
-    return this.getByIndex(index);
+    return this.getIndex(index);
   }
 
-  public static getByIndex(index: number): number {
-    return this.temperatureMap.get(index) || 0;
+  public getIndex(index: number): number {
+    // return this.temperatureMap.get(index) || 0;
+    return this.temperatureMap[index] || 0; // Default to 0 if not set
   }
 
-  public static set(x: number, y: number, temp: number): void {
+  public setPosition(x: number, y: number, temp: number): void {
     const index = positionToIndex(x, y, Layer.TERRAIN);
-    this.baseTemperatureMap.set(index, temp);
+    this.baseTemperatureMap[index] = temp;
+    this.temperatureMap[index] = temp; // Also update the adjusted temperature
+    // this.baseTemperatureMap.set(index, temp);
+    // this.temperatureMap.set(index, temp); // Also update the adjusted temperature
+    this.temperatureHistory.set(index, [temp]); // Reset history for this position
   }
 
-  public static logDetails(): void {
+  public logDetails(): void {
     console.log(
-      `SystemTemperature: ${this.baseTemperatureMap.size} temperatures generated.` +
-        `Season: ${
-          SystemTime.season
-        } and modifier: ${this.calculateSeasonModifier()}` +
+      `Season: ${
+        SystemTime.season
+      } and modifier: ${this.applySeasonModifier()}` +
         `Time of day: ${SystemTime.isDayTime ? "Day" : "Night"}` +
-        `Time of day modifier: ${this.calculateDaytimeModifier()}` +
+        `Time of day modifier: ${this.applyDaytimeModifier()}` +
         `Temperature Scale: ${this.modifiers.baseTemperature}`
     );
   }
+}
 
-  public static getDescription(temperature: number): Climates {
+// SystemPoles class provides a singleton interface for managing the poles system.
+export class SystemTemperature {
+  private static instance = new SystemTemperatureImplementation();
+
+  static init() {
+    return this.instance.init(
+      GameSettings.options.temperature.generationSettings,
+      GameSettings.options.temperature.generationModifiers,
+      GameSettings.options.temperature.updateSettings,
+      GameSettings.options.gameSize.width,
+      GameSettings.options.gameSize.height
+    );
+  }
+
+  static generate(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    noise: Noise,
+    map: MapWorld
+  ) {
+    return this.instance.generate(x, y, width, height, noise, map);
+  }
+
+  static at(x: number, y: number): number {
+    return this.instance.getPosition(x, y);
+  }
+
+  static atIndex(index: number): number {
+    return this.instance.getIndex(index);
+  }
+
+  static get all(): Float32Array {
+    return this.instance.getAll();
+  }
+
+  static setAt(x: number, y: number, temp: number): void {
+    this.instance.setPosition(x, y, temp);
+  }
+
+  static turnUpdate(): void {
+    this.instance.turnUpdate();
+  }
+
+  static describe(temperature: number): Climates {
     for (let climate in TempMap) {
       const range = TempMap[climate];
       if (temperature >= range.min && temperature <= range.max) {

@@ -123,7 +123,7 @@ export class TileInfo extends HTMLElement {
     closeBtn.style.cursor = "pointer";
 
     closeBtn.addEventListener("click", () => {
-      this.game.userInterface.camera.clearPointerTarget();
+      this.game.camera.clearPointerTarget();
       this.setContent(null);
     });
 

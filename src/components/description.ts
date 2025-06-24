@@ -67,9 +67,7 @@ export class Description {
             target?.info?.temperaturePercent,
             GameSettings.options.temperatureRange
           )
-        )}°F — ${SystemTemperature.getDescription(
-          target?.info?.temperaturePercent
-        )}`,
+        )}°F — ${SystemTemperature.describe(target?.info?.temperaturePercent)}`,
       });
       descriptionBlocks.push({
         icon: HeightIcon,

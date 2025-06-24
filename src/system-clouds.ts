@@ -1,10 +1,12 @@
 import { Game } from "./game";
-import { lerp } from "./misc-utility";
+import { lerp, positionToIndex } from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { GameSettings } from "./game-settings";
 import { SystemTime } from "./system-time";
 import { SystemTemperature } from "./system-temperature";
 import { SystemMoisture } from "./system-moisture";
+import { Tile } from "./tile";
+import { Layer } from "./renderer";
 
 export enum MessageType {
   INIT,
@@ -14,12 +16,13 @@ export enum MessageType {
 }
 
 export class SystemClouds {
-  public static cloudMap: number[];
-  public static targetCloudMap: number[];
+  public static cloudMap: Float32Array;
+  public static targetCloudMap: Float32Array; // interpolate cloudMap to targetCloudMap to smooth transitions
   public static cloudStrength: number;
   public static sunbeamStrength: number;
   public static cloudMinLevel: number; // threshold for when a cloud begins
   public static sunbeamMaxLevel: number; // threshold for when a sunbeam ends
+  private static cloudMapBuffer: SharedArrayBuffer; // the buffer used to share data with the worker
   private static worker: Worker;
 
   public static init() {
@@ -31,12 +34,19 @@ export class SystemClouds {
     this.worker = new Worker(
       new URL("./system-clouds-worker.ts", import.meta.url)
     );
-    this.cloudMap = [];
-    this.targetCloudMap = [];
-    let cloudMap: Map<number, number>;
+    const bufferSize =
+      GameSettings.options.gameSize.width *
+      GameSettings.options.gameSize.height *
+      Tile.tileDensityRatio;
+    this.cloudMapBuffer = new SharedArrayBuffer(
+      bufferSize * Float32Array.BYTES_PER_ELEMENT
+    );
+    this.cloudMap = new Float32Array(bufferSize);
+    this.targetCloudMap = new Float32Array(this.cloudMapBuffer);
     this.worker.postMessage({
       type: MessageType.INIT,
       data: {
+        sharedBuffer: this.cloudMapBuffer,
         gameWidth: GameSettings.options.gameSize.width,
         gameHeight: GameSettings.options.gameSize.height,
         cloudStrength: this.cloudStrength,
@@ -62,59 +72,31 @@ export class SystemClouds {
     });
     this.worker.onmessage = (e) => {
       if (e.data.type === MessageType.UPDATE) {
-        cloudMap = e.data.data.cloudMap;
         this.cloudStrength = e.data.data.cloudStrength;
         this.sunbeamStrength = e.data.data.sunbeamStrength;
-        for (let [tileIndex, cloudValue] of cloudMap.entries()) {
-          if (cloudValue === undefined) {
-            continue;
-          }
-          this.set(tileIndex, this.targetCloudMap[tileIndex]);
-        }
-        this.targetCloudMap.length = 0;
-        for (let [tileIndex, cloudValue] of cloudMap.entries()) {
-          if (cloudValue === undefined) {
-            continue;
-          }
-          this.targetCloudMap[tileIndex] = cloudValue;
-        }
-      }
-      if (e.data.type === MessageType.ON_ENTER) {
-        cloudMap = e.data.data;
-        for (let [tileIndex, cloudValue] of cloudMap.entries()) {
-          if (cloudValue === undefined) {
-            continue;
-          }
-          this.set(tileIndex, cloudValue);
-          this.targetCloudMap[tileIndex] = cloudValue;
-        }
       }
     };
   }
 
-  // called each game turn
-  public static turnUpdate(map: MapWorld, tileIndexes: number[]) {
+  public static turnUpdate(map: MapWorld) {
     if (!GameSettings.options.toggles.enableClouds) {
       return;
     }
-    // const biomeIds = tileIndexes.map((tileIndex) =>
-    //   map.biomeMap.get(tileIndex)
-    // );
-    const heights = tileIndexes.map((tileIndex) =>
-      map.heightMap.get(tileIndex)
-    );
-    const temperatures = tileIndexes.map((tileIndex) =>
-      SystemTemperature.getByIndex(tileIndex)
-    );
-    const moistures = tileIndexes.map((tileIndex) =>
-      SystemMoisture.getByIndex(tileIndex)
-    );
+
+    let heights = [];
+    let moistures = [];
+    for (let i = 0; i < GameSettings.options.gameSize.width; i++) {
+      for (let j = 0; j < GameSettings.options.gameSize.height; j++) {
+        const index = positionToIndex(i, j, Layer.TERRAIN);
+        heights[index] = map.heightMap.get(index) ?? 0;
+        moistures[index] = SystemMoisture.atIndex(index);
+      }
+    }
     this.worker?.postMessage({
       type: MessageType.UPDATE,
       data: {
-        tileIndexes: tileIndexes,
         heights,
-        temperatures,
+        temperatures: SystemTemperature.all,
         moistures,
       },
     });
@@ -139,57 +121,32 @@ export class SystemClouds {
     if (!GameSettings.options.toggles.enableClouds) {
       return;
     }
-    let val: number;
-    let posIndex: number;
-    // only iterate through tiles in the viewport
-    for (let i = 0; i < tileIndexes.length; i++) {
-      posIndex = tileIndexes[i];
-      val = lerp(
-        SystemTime.turnAnimTimePercent,
-        this.get(posIndex),
-        this.targetCloudMap[posIndex]
-      );
-      this.set(posIndex, val);
+
+    if (this.targetCloudMap) {
+      let val: number;
+      let posIndex: number;
+      // only iterate through tiles in the viewport
+      for (let i = 0; i < tileIndexes.length; i++) {
+        posIndex = tileIndexes[i];
+        val = lerp(
+          SystemTime.turnAnimTimePercent,
+          this.atIndex(posIndex),
+          this.targetCloudMap[posIndex]
+        );
+        this.setIndex(posIndex, val);
+      }
     }
   }
 
-  public static set(index: number, cloudLevel: number): void {
+  public static setIndex(index: number, cloudLevel: number): void {
     this.cloudMap[index] = cloudLevel;
   }
 
-  public static get(index: number): number {
-    return this.cloudMap[index];
+  public static atIndex(index: number): number {
+    return this.cloudMap ? this.cloudMap[index] : 0; // Default to 0 if not set
   }
 
-  public static getTarget(index: number): number {
-    return this.targetCloudMap[index];
-  }
-
-  public static onEnter(updateTileIndexes: number[], map: MapWorld): void {
-    if (!GameSettings.options.toggles.enableClouds) {
-      return;
-    }
-    if (updateTileIndexes.length === 0) {
-      return;
-    }
-    const heights = updateTileIndexes.map((tileIndex) =>
-      map.heightMap.get(tileIndex)
-    );
-    const temperatures = updateTileIndexes.map((tileIndex) =>
-      SystemTemperature.getByIndex(tileIndex)
-    );
-    const moistures = updateTileIndexes.map((tileIndex) =>
-      SystemMoisture.getByIndex(tileIndex)
-    );
-    this.worker?.postMessage({
-      type: MessageType.ON_ENTER,
-      data: {
-        tileIndexes: updateTileIndexes,
-        heights,
-        temperatures,
-        moistures,
-        // biomeIds: updateTileIndexes.map((index) => map.biomeMap.get(index)),
-      },
-    });
+  public static atTargetIndex(index: number): number {
+    return this.targetCloudMap ? this.targetCloudMap[index] : 0;
   }
 }

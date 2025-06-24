@@ -2,10 +2,18 @@ import GameStats from "gamestats.js";
 import * as PIXI from "pixi.js";
 import { Game } from "./game";
 import { TemperatureSettings } from "./system-temperature";
+import { MoistureSettings } from "./system-moisture";
+import { PolesSettings } from "./system-poles";
+import { ShadowsSettings } from "./system-shadows";
+import { OcclusionSettings } from "./system-occlusion";
 
 interface AllOptions {
   [key: string]: any;
   temperature: TemperatureSettings;
+  moisture: MoistureSettings;
+  poles: PolesSettings;
+  shadows: ShadowsSettings;
+  occlusion: OcclusionSettings;
 }
 
 export class GameSettings {
@@ -62,7 +70,6 @@ export class GameSettings {
     renderChunkCount: 1, // how many chunks to split the world into for rendering MUST BE ODD, ex: 3 = 3x3 = 9 chunks
     hideDenseLayersTileCount: 150 * 150, // hide dense layers (like groundcover) if the tile count exceeds this value
     ambientLightStrength: 0.8,
-    minShadowLength: 1,
     viewportPadding: 15, // how many tiles to pad the viewport on each side
     temperatureRange: {
       min: -40,
@@ -85,41 +92,41 @@ export class GameSettings {
       max: 100,
     },
     shadows: {
-      shadowStrengthMultiplier: 0.35, // primary way to adjust shadow strength
-      minShadowLength: 3,
-      maxShadowLength: 8,
-      minShadowStrength: 0.18,
-      shadowLengthMultiplier: 2,
-      nightShadowLengthFactor: 0.5,
-      nightShadowStrengthFactor: 0.8,
-      baseSlopeThreshold: 0.015,
+      shadowStrengthMultiplier: 1.2, // primary way to adjust shadow strength
+      minShadowLength: 1, // length of 0 means they disappear at noon
+      maxShadowLength: 13,
+      minShadowStrength: 0.3, // minimum strength of shadows, 0 means no shadows
+      shadowLengthMultiplier: 1.4, // shifts shadow length closer to min or max
+      nightShadowLengthFactor: 0.8,
+      nightShadowStrengthFactor: 0.6,
+      baseSlopeThreshold: 0.9,
       slopeThresholdRange: 0.05,
       slopeMaxThreshold: 0.06,
       raytracingResolution: 1,
     },
     occlusion: {
-      dayStartStrength: 2,
-      dayMidStrength: 1,
-      dayEndStrength: 2,
-      nightMidStrength: 4,
-      maxOcclusionAmount: 0.17,
+      dayStartStrength: 1.2,
+      dayMidStrength: 0.8,
+      dayEndStrength: 1.4,
+      nightMidStrength: 1.3,
+      maxOcclusionAmount: 0.35,
     },
     temperature: {
-      modifiers: {
-        baseTemperature: 0.05, // primary way to adjust temperature, used as base noise Value
-        magnetismModifier: 0.35, // how much magnetism affects temperature, making the poles colder
-        heightModifier: 0.3, // how much height affects temperature, making higher areas colder
+      generationModifiers: {
+        baseTemperature: 0.22, // primary way to adjust temperature, used as base noise Value
+        magnetismModifier: 0.8, // how much magnetism affects temperature, making the poles colder
+        heightModifier: 0.16, // how much height affects temperature, making higher areas colder
         dayModifier: 0.08, // Maximum temperature increase at midday
         nightModifier: 0.04, // Maximum temperature decrease at night's end
-        sunShadowModifier: 0.3, // How much shadows cool the temperature
-        occlusionShadowModifier: 0.4, // How much valley occlusion cools the temperature
-        cloudShadowModifier: 0.2, // How much clouds cool the temperature
+        sunShadowModifier: 0.1, // How much shadows cool the temperature
+        occlusionShadowModifier: 0.1, // How much valley occlusion cools the temperature
+        cloudShadowModifier: 0.03, // How much clouds cool the temperature
         summerModifier: 0.15, // Significant warming
         springModifier: 0.05, // Mild warming
         fallModifier: -0.05, // Mild cooling
         winterModifier: -0.15, // Significant cooling
       },
-      noiseGeneration: {
+      generationSettings: {
         baseScale: 0.4, // Base noise scale
         secondaryScale: 0.85, // Secondary noise scale
         tertiaryScale: 2, // third noise scale
@@ -128,14 +135,60 @@ export class GameSettings {
         tertiaryWeight: 0.07, // Weight of third noise
       },
       updateSettings: {
-        interval: 5, // Update temperature every 5 turns
+        interval: 4, // Update temperature every 5 turns
         historyLength: 3, // Keep 3 historical values for averaging
       },
     },
-    magnetism: {
-      noiseScale: 1.2,
+    moisture: {
+      modifiers: {
+        baseMoisture: 0, // Base moisture level to start from
+        multiplier: 1, // multiplies the final noise value before normlizing it
+        nearWaterMultiplier: 1.1, // Multiplier for moisture when near water
+      },
+      noiseGeneration: {
+        baseScale: 0.018,
+        baseWeight: 0.0, // how much to apply the base noise value
+      },
+      updateSettings: {
+        interval: 5, // Update moisture every 5 turns
+        historyLength: 3, // Keep 3 historical values for averaging
+      },
+    },
+    poles: {
+      generationSettings: {
+        baseScale: 2,
+        baseWeight: 1,
+      },
+      generationModifiers: {
+        baseMagnetism: 0, // Base magnetism level to start from
+        contrastModifier: 0.45, // Multiplier to increase contrast of the noise value
+        northPoleXModifier: 1, // Multiplier for the X position of the north pole
+        northPoleYModifier: 1, // Multiplier for the Y position of the north pole
+        SouthPoleXModifier: 1, // Multiplier for the X position of the south pole
+        southPoleYModifier: 0.2, // Multiplier for the Y position of the south pole
+        poleXRadiusModifier: 1.1, // Multiplier for the X radius of both poles
+        poleYRadiusModifier: 1.2, // Multiplier for the Y radius of both poles
+      },
     },
     clouds: {
+      // add simple controls for cloudiness...
+      // how to increase and decrease day by day/hour by hour
+      // maybe this exists already
+      // need to make some days cloudy, some sunny, etc
+      // maybe need a full on system-weather that controls multiple systems...
+      // OR at this point, maybe we can go back to plant growth
+      // plants need temperature, moisture, light, those are all in, right?
+      // temp: -40 to 140, changes over time per day (not seasonal yet)
+      // moisture: does not change at all, not sure of min/max. Needs changes
+      // light: 0 to 100, changes over time per day (not seasonal yet)
+
+      //
+      //
+      //
+      //
+      //
+      //
+      //
       windSpeed: {
         x: 0.5,
         y: -0.2,
@@ -237,11 +290,19 @@ export class GameSettings {
 
   constructor(private game: Game) {}
 
-  public loadSettings(): void {
+  public loadSettings(data: Record<string, string>): void {
+    for (let toggle in GameSettings.options.toggles) {
+      GameSettings.options.toggles[toggle] = data[toggle] === "true";
+    }
+    for (let input in GameSettings.options.spawn.inputs) {
+      GameSettings.options.spawn.inputs[input] = parseInt(data[input], 10);
+    }
+
+    console.log("Load Game Settings", data, GameSettings.options);
+
     if (GameSettings.options.toggles.enableStats) {
       this.initGameStatsMonitor();
     }
-    this.game.resetGame();
   }
 
   public initGameStatsMonitor(): void {
@@ -260,11 +321,7 @@ export class GameSettings {
       COLOR_MEM_TEXTURE: "#8ddcff", // the display color of the texture memory size in the graph
       COLOR_MEM_BUFFER: "#ffd34d", // the display color of buffer memory size in the graph
     };
-    this.stats.enableExtension("pixi", [
-      PIXI,
-      this.game.userInterface.application,
-      options,
-    ]);
+    this.stats.enableExtension("pixi", [PIXI, this.game.application, options]);
   }
 
   public static shouldTint(): boolean {

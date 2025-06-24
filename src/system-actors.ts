@@ -16,7 +16,7 @@ import {
   WithGrowth,
   isUi,
 } from "./actor";
-import { AnimatedSprite, Sprite } from "pixi.js";
+import { DisplayObject } from "pixi.js";
 import { SystemAnimated } from "./system-animated";
 import { SystemCollision } from "./system-collision";
 import { SystemTime } from "./system-time";
@@ -185,9 +185,9 @@ export class SystemActors {
       actor.position.y,
       actor.layer
     );
-    let removeObj: Sprite | AnimatedSprite;
+    let removeObj: DisplayObject;
     if (actor.sprite) {
-      removeObj = actor.sprite;
+      removeObj = actor.sprite as DisplayObject;
     }
 
     this.game.renderer.removeFromScene(removeObj, actor.layer);

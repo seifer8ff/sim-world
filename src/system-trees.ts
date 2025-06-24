@@ -2,7 +2,7 @@ import { ActorBase, WithID, WithPosition } from "./actor";
 import { Species } from "./species";
 import { generateId } from "./misc-utility";
 import { RNG } from "rot-js";
-import { Sprite } from "pixi.js";
+import { DisplayObject, Sprite } from "pixi.js";
 import { Point } from "./point";
 import { Layer, Renderer } from "./renderer";
 import { Tile } from "./tile";
@@ -98,7 +98,11 @@ export class SystemTrees {
       ) as ColorType;
 
       if (Camera.inViewport(x, y, layer, viewport)) {
-        renderer.renderDisplayObject(sprite, layer, tint as ColorType);
+        renderer.renderDisplayObject(
+          sprite as DisplayObject,
+          layer,
+          tint as ColorType
+        );
       }
     }
   }

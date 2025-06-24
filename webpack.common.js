@@ -1,8 +1,5 @@
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
-const FileManagerPlugin = require("filemanager-webpack-plugin");
-const path = require("path");
-const webpack = require("webpack");
 
 module.exports = {
   entry: "./src/app.ts",
@@ -45,16 +42,11 @@ module.exports = {
   },
   resolve: {
     extensions: [".ts", ".tsx", ".js"],
-    fallback: {
-      buffer: require.resolve("buffer/"),
-    },
   },
   output: {
     filename: "app.js",
     clean: true,
     globalObject: "this",
-    path: path.resolve(__dirname, "dist"),
-    publicPath: "/dist/", // Ensure static paths for worker scripts
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -87,10 +79,10 @@ module.exports = {
         `,
     }),
     new CopyWebpackPlugin({
-      patterns: [{ from: "./public", to: "public" }],
-    }),
-    new webpack.ProvidePlugin({
-      Buffer: ["buffer", "Buffer"],
+      patterns: [
+        { from: "./public", to: "public" },
+        { from: "serve.json", to: "serve.json" },
+      ],
     }),
   ],
 };

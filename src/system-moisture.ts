@@ -1,12 +1,19 @@
-import { lerp, positionToIndex } from "./misc-utility";
+import {
+  lerp,
+  normalize,
+  normalizeNoise,
+  positionToIndex,
+} from "./misc-utility";
 import { MapWorld } from "./map-world";
 import { Biomes } from "./biomes";
 import Noise from "rot-js/lib/noise/noise";
 import { Layer } from "./renderer";
+import { SystemTime } from "./system-time";
+import { GameSettings } from "./game-settings";
 
 export enum MoistureZones {
   SuperSaturated = "Super Saturated",
-  Wet = "Wet",
+  Wet = "Humid",
   Balanced = "Balanced",
   Dry = "Dry",
   Arid = "Arid",
@@ -35,13 +42,45 @@ export const MoistureZoneMap = {
   },
 };
 
+export interface MoistureSettings {
+  modifiers: MoistureModifiers;
+  noiseGeneration: MoistureNoiseGenerationSettings;
+  updateSettings: MoistureUpdateSettings;
+}
+
+export interface MoistureModifiers {
+  nearWaterMultiplier: number; // Multiplier for when near water
+  multiplier: number; // Multiplier for the final noise value before normalizing it
+  baseMoisture: number; // Base moisture level to start from
+}
+
+export interface MoistureNoiseGenerationSettings {
+  baseWeight: number;
+  baseScale: number;
+}
+
+export interface MoistureUpdateSettings {
+  interval: number;
+  historyLength: number;
+}
+
 export class SystemMoisture {
+  public static baseMoistureMap: Map<number, number>;
   public static moistureMap: Map<number, number>;
-  public static scale: number;
+  private static moistureHistory: Map<number, number[]>; // Store recent moisture values
+
+  // Cache of settings for performance
+  private static modifiers: MoistureModifiers;
+  private static generationSettings: MoistureNoiseGenerationSettings;
+  private static updateSettings: MoistureUpdateSettings;
 
   public static init() {
+    this.baseMoistureMap = new Map();
     this.moistureMap = new Map();
-    this.scale = 1;
+    this.moistureHistory = new Map();
+    this.modifiers = GameSettings.options.moisture.modifiers;
+    this.generationSettings = GameSettings.options.moisture.noiseGeneration;
+    this.updateSettings = GameSettings.options.moisture.updateSettings;
   }
 
   public static generate(
@@ -53,38 +92,154 @@ export class SystemMoisture {
     map: MapWorld
   ): number {
     const index = positionToIndex(x, y, Layer.TERRAIN);
-    const nearWater = map.isAdjacentToBiome(x, y, map.terrainAdjacencyD2Map, [
-      Biomes.Biomes.ocean.id,
-    ]);
+    const terrainHeight = map.heightMap.get(index);
+    const isWater = map.isWater(x, y);
+    // const distanceToWater = this.distanceTo(x, y, [
+    //   Biomes.Biomes.ocean.id,
+    //   Biomes.Biomes.oceandeep.id,
+    // ]);
 
-    let noiseX = x / width - 0.5;
-    let noiseY = y / height - 0.5;
-    noiseX = x / 55;
-    noiseY = y / 55;
-    let noiseValue = noise.get(noiseX, noiseY);
-    noiseValue = Math.min(1, Math.max(-1, noiseValue));
-    noiseValue = (noiseValue + 1) / 2;
+    const noiseX = x / width;
+    const noiseY = y / height;
+    let noiseValue = this.modifiers.baseMoisture; // start with a base temperature modifier, positive or negative
+
+    // Calculate base noise with multiple octaves
+    noiseValue +=
+      noise.get(
+        noiseX * this.generationSettings.baseScale,
+        noiseY * this.generationSettings.baseScale
+      ) * this.generationSettings.baseWeight;
+
+    noiseValue = normalizeNoise(noiseValue);
+    // if (!isWater) {
+    //   console.log(noiseValue);
+    // }
     // multiply if near water
-    if (noiseValue > MoistureZoneMap[MoistureZones.Balanced].min && nearWater) {
-      noiseValue = noiseValue * 1.1;
+    // if (noiseValue > MoistureZoneMap[MoistureZones.Balanced].min && nearWater) {
+    //   noiseValue = noiseValue * this.modifiers.nearWaterMultiplier;
+    // }
+
+    if (isWater) {
+      const moisturePercent = map.seaLevel - terrainHeight / map.seaLevel;
+      noiseValue = lerp(
+        moisturePercent,
+        MoistureZoneMap[MoistureZones.Wet].min,
+        MoistureZoneMap[MoistureZones.Wet].max
+      );
+      // noiseValue is increased to wet level + how far below sea
+      // const middleWetLevel =
+      //   MoistureZoneMap[MoistureZones.Wet].min +
+      //   (MoistureZoneMap[MoistureZones.Wet].max -
+      //     MoistureZoneMap[MoistureZones.Wet].min) /
+      //     2;
+      // noiseValue = middleWetLevel;
     }
 
+    noiseValue *= this.modifiers.multiplier;
+
     // console.log("temp", noiseValue, terrainHeight);
-    this.moistureMap.set(index, lerp(noiseValue * this.scale, 0, 1));
+    this.baseMoistureMap.set(
+      index,
+      normalize(noiseValue)
+      // lerp(noiseValue, 0, 1)
+    );
+    // if (!isWater) {
+    //   console.log(this.baseMoistureMap.get(index));
+    // }
     // console.log("scaled temp", this.tempMap[key]);
-    return this.moistureMap.get(index);
+    return this.baseMoistureMap.get(index);
   }
 
-  public static set(x: number, y: number, temp: number): void {
-    this.moistureMap.set(positionToIndex(x, y, Layer.TERRAIN), temp);
+  // public static generate(
+  //   x: number,
+  //   y: number,
+  //   width: number,
+  //   height: number,
+  //   noise: Noise,
+  //   map: MapWorld
+  // ): number {
+  //   const index = positionToIndex(x, y, Layer.TERRAIN);
+  //   const terrainHeight = map.heightMap.get(index);
+  //   const isWater = map.isWater(x, y);
+  //   const nearWater = map.isAdjacentToBiome(x, y, map.terrainAdjacencyD2Map, [
+  //     Biomes.Biomes.ocean.id,
+  //   ]);
+
+  //   let noiseX = x / width - 0.5;
+  //   let noiseY = y / height - 0.5;
+  //   noiseX = x * this.generationSettings.baseScale;
+  //   noiseY = y * this.generationSettings.baseScale;
+  //   let noiseValue = noise.get(noiseX, noiseY);
+  //   noiseValue = normalizeNoise(noiseValue);
+  //   // noiseValue = Math.min(1, Math.max(-1, noiseValue));
+  //   // noiseValue = (noiseValue + 1) / 2;
+  //   // multiply if near water
+  //   if (noiseValue > MoistureZoneMap[MoistureZones.Balanced].min && nearWater) {
+  //     noiseValue = noiseValue * this.modifiers.nearWaterMultiplier;
+  //   }
+
+  //   if (isWater) {
+  //     const moisturePercent = map.seaLevel - terrainHeight / map.seaLevel;
+  //     noiseValue = lerp(
+  //       moisturePercent,
+  //       MoistureZoneMap[MoistureZones.Wet].min,
+  //       MoistureZoneMap[MoistureZones.Wet].max
+  //     );
+  //     // noiseValue is increased to wet level + how far below sea
+  //     // const middleWetLevel =
+  //     //   MoistureZoneMap[MoistureZones.Wet].min +
+  //     //   (MoistureZoneMap[MoistureZones.Wet].max -
+  //     //     MoistureZoneMap[MoistureZones.Wet].min) /
+  //     //     2;
+  //     // noiseValue = middleWetLevel;
+  //   }
+
+  //   noiseValue *= this.modifiers.multiplier;
+
+  //   // console.log("temp", noiseValue, terrainHeight);
+  //   this.baseMoistureMap.set(
+  //     index,
+  //     normalizeNoise(noiseValue)
+  //     // lerp(noiseValue, 0, 1)
+  //   );
+  //   // console.log("scaled temp", this.tempMap[key]);
+  //   return this.baseMoistureMap.get(index);
+  // }
+
+  public static turnUpdate(): void {
+    if (SystemTime.currentTurn % this.updateSettings.interval === 0) {
+      // Time to do a full temperature update
+      this.updateMoistureLevels();
+    }
   }
 
-  public static get(x: number, y: number): number {
-    return this.moistureMap?.get(positionToIndex(x, y, Layer.TERRAIN));
+  private static updateMoistureLevels(): void {
+    // how should we update moisture?
+    //
+    // this.baseMoistureMap.forEach((baseTemp, index) => {
+    //   // Calculate current temperature
+    //   const currentAdjusted = this.calculateAdjustedTemp(baseTemp, index);
+    //   // Record to history
+    //   this.recordTemperatureHistory(index, currentAdjusted);
+    //   // Calculate averaged temperature
+    //   const history = this.temperatureHistory.get(index) || [currentAdjusted];
+    //   const avgTemp =
+    //     history.reduce((sum, temp) => sum + temp, 0) / history.length;
+    //   // Store the adjusted temperature directly
+    //   this.temperatureMap.set(index, avgTemp);
+    // });
   }
 
-  public static getByIndex(index: number): number {
-    return this.moistureMap?.get(index);
+  public static setAt(x: number, y: number, temp: number): void {
+    this.baseMoistureMap.set(positionToIndex(x, y, Layer.TERRAIN), temp);
+  }
+
+  public static at(x: number, y: number): number {
+    return this.baseMoistureMap?.get(positionToIndex(x, y, Layer.TERRAIN));
+  }
+
+  public static atIndex(index: number): number {
+    return this.baseMoistureMap?.get(index);
   }
 
   public static getDescriptionForMoisture(

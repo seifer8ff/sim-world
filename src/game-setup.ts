@@ -21,6 +21,14 @@ import {
 } from "./components/animation-map";
 import { Point } from "./point";
 import { SystemTime } from "./system-time";
+import { SystemPoles } from "./system-poles";
+import { SystemTemperature } from "./system-temperature";
+import { SystemMoisture } from "./system-moisture";
+import { SystemShadows } from "./system-shadows";
+import { SystemOcclusion } from "./system-occlusion";
+import { SystemClouds } from "./system-clouds";
+import { SystemLLM } from "./system-llm";
+import { SystemCollision } from "./system-collision";
 
 // add the initial flora/fauna to the game world
 export class GameSetup {
@@ -33,10 +41,6 @@ export class GameSetup {
   private nameGen: GeneratorNames;
 
   constructor(private game: Game) {
-    this.actorManager = this.game.actorManager;
-    this.map = this.game.map;
-    this.userInterface = this.game.userInterface;
-    this.nameGen = this.game.nameGenerator;
     this.landBiomes = [
       Biomes.Biomes.moistdirt.id,
       Biomes.Biomes.hillsmid.id,
@@ -49,7 +53,41 @@ export class GameSetup {
     this.airBiomes = [...this.landBiomes, Biomes.Biomes.ocean.id];
   }
 
-  init(): void {
+  initialSetup(): void {
+    console.log("GameSetup: initialSetup");
+    this.actorManager = this.game.actorManager;
+    this.map = this.game.map;
+    this.userInterface = this.game.userInterface;
+    this.nameGen = this.game.nameGenerator;
+    this.game.gameState.loading = true;
+
+    //
+    // ORDER IS CRITICAL HERE
+
+    SystemPoles.init();
+    SystemClouds.init();
+    SystemTemperature.init();
+    SystemMoisture.init();
+
+    SystemCollision.init();
+    SystemTime.init();
+
+    this.map.lightManager.init();
+    this.game.renderer.init();
+    SystemLLM.init();
+
+    this.userInterface.components.init();
+
+    this.map.generateMap(
+      GameSettings.options.gameSize.width,
+      GameSettings.options.gameSize.height
+    );
+
+    SystemShadows.init(this.map);
+    SystemOcclusion.init(this.map);
+
+    // ABOVE ORDER IS CRITICAL
+
     this.spawnInitialPlants();
     this.spawnInitialAnimals();
     SystemTime.setIsPaused(false);
@@ -61,7 +99,6 @@ export class GameSetup {
     for (let i = 0; i < skipTurns; i++) {
       this.game.gameLoop();
     }
-    this.game.gameState.worldSetupComplete = true;
   }
 
   private spawnInitialAnimals(): void {

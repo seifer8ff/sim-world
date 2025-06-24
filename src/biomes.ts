@@ -83,7 +83,7 @@ export class Biomes {
     y: number,
     maps: {
       height: Map<number, number>;
-      temperature: Map<number, number>;
+      temperature: Float32Array;
       moisture: Map<number, number>;
     },
     generationOptions: GenerationOptions
@@ -105,7 +105,7 @@ export class Biomes {
     if (generationOptions.temperature) {
       if (
         !Biomes.inRangeOf(
-          maps.temperature.get(index),
+          maps.temperature[index],
           generationOptions.temperature
         )
       ) {

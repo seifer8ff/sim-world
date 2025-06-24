@@ -27,11 +27,11 @@ import { SystemTime } from "./system-time";
 import { SystemMoisture } from "./system-moisture";
 import { SystemTemperature } from "./system-temperature";
 import { SystemPoles } from "./system-poles";
-import { positionToIndex } from "./misc-utility";
-import { Layer } from "./renderer";
+import { SystemShadows } from "./system-shadows";
+import { SystemClouds } from "./system-clouds";
 
 export class ManagerWebComponents {
-  private timeControl: TimeControl;
+  public timeControl: TimeControl;
   public titleMenu: TitleMenu;
   public sideMenu: SideMenu;
   public tileInfo: TileInfo;
@@ -41,8 +41,8 @@ export class ManagerWebComponents {
   public utilityActions: UtilityActions;
 
   constructor(private game: Game, private ui: UserInterface) {
-    this.initWebComponents();
-    this.initRequiredControls();
+    this.registerWebComponents();
+    this.initComponents();
   }
 
   public refreshComponents() {
@@ -51,11 +51,11 @@ export class ManagerWebComponents {
       this.overlay.refresh(this.game.map);
     }
     if (this.game.gameState.stage === Stages.Play) {
-      if (this.ui.camera.pointerTarget) {
+      if (this.game.camera.pointerTarget) {
         // refresh the target info data obj
-        this.ui.camera.refreshPointerTargetInfo();
+        this.game.camera.refreshPointerTargetInfo();
         // refresh the tile info UI with the new data
-        this.tileInfo.setContent(this.ui.camera.pointerTarget);
+        this.tileInfo.setContent(this.game.camera.pointerTarget);
       }
     }
   }
@@ -64,7 +64,7 @@ export class ManagerWebComponents {
     this.initSecondaryControls();
   }
 
-  private initWebComponents() {
+  private registerWebComponents() {
     customElements.define("title-menu", TitleMenu);
     customElements.define("time-control", TimeControl);
     customElements.define("side-menu-content", SideMenuContent);
@@ -134,7 +134,7 @@ export class ManagerWebComponents {
     }
   }
 
-  private initRequiredControls() {
+  private initComponents() {
     this.titleMenu = document.querySelector("title-menu");
     if (this.titleMenu) {
       this.titleMenu.handle.addEventListener("click", () => {
@@ -181,23 +181,8 @@ export class ManagerWebComponents {
           try {
             const serializedData: Record<string, string> = serialize(
               this.titleMenu.form
-            ) as any;
-            console.log("data", serializedData);
-            for (let toggle in GameSettings.options.toggles) {
-              GameSettings.options.toggles[toggle] =
-                serializedData[toggle] === "true";
-            }
-            for (let input in GameSettings.options.spawn.inputs) {
-              GameSettings.options.spawn.inputs[input] = parseInt(
-                serializedData[input],
-                10
-              );
-            }
-            console.log(
-              "-------- ----- ---- --- updated settings",
-              GameSettings.options
-            );
-            this.game.settings.loadSettings();
+            ) as Record<string, string>;
+            this.game.settings.loadSettings(serializedData);
             this.game.gameState.changeStage(Stages.Play);
           } catch (error) {
             console.log("error on form submit", e, error);
@@ -212,26 +197,6 @@ export class ManagerWebComponents {
     if (this.timeControl) {
       this.timeControl.updateTime(SystemTime.getCurrentTimeForDisplay());
       this.timeControl.updatePauseBtn(SystemTime.isPaused);
-    }
-  }
-
-  public renderUpdate() {
-    if (this.game.gameState.isLoading()) {
-      if (this.game.gameState.stage === Stages.Title) {
-        this.titleMenu.setCollapsed(false);
-        this.sideMenu?.setVisible(false, true);
-        this.timeControl?.setVisible(false);
-      } else if (this.game.gameState.stage === Stages.Play) {
-        this.titleMenu?.setCollapsed(true);
-        this.sideMenu.setVisible(true, true);
-        this.timeControl.setVisible(true);
-      }
-      this.game.gameState.loading = false;
-    }
-    if (this.game.gameState.stage === Stages.Title) {
-      if (this.tileSelectionIndicator) {
-        this.tileSelectionIndicator.renderUpdate();
-      }
     }
   }
 
@@ -260,7 +225,7 @@ export class ManagerWebComponents {
       icon: getTextureURL(iconTexture),
       clickHandler: () => {
         console.log(`clicked on ${actor.id}`);
-        this.ui.camera.setPointerTarget(actor.position, actor, true);
+        this.game.camera.setPointerTarget(actor.position, actor, true);
       },
       label: actor.name,
       tooltip: `Entity: ${actor.id}`,
@@ -284,8 +249,8 @@ export class ManagerWebComponents {
         );
 
         this.game.map.setTile(
-          this.ui.camera.pointerTarget.position.x,
-          this.ui.camera.pointerTarget.position.y,
+          this.game.camera.pointerTarget.position.x,
+          this.game.camera.pointerTarget.position.y,
           tile
         );
       },
@@ -351,29 +316,29 @@ export class ManagerWebComponents {
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Magnetism",
-      () => SystemPoles.magnetismMap
+      () => SystemPoles.all
     );
 
-    this.overlay.generateOverlay(
+    this.overlay.generateOverlayFromArray(
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Temperature",
-      () => SystemTemperature.getMap()
+      () => SystemTemperature.all
     );
 
-    this.overlay.generateGradientOverlay(
+    this.overlay.generateGradientOverlayFromArray(
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Temperature (blue <---> red)",
       { min: "blue", max: "red" },
-      () => SystemTemperature.getMap()
+      () => SystemTemperature.all
     );
 
     this.overlay.generateOverlay(
       GameSettings.options.gameSize.width,
       GameSettings.options.gameSize.height,
       "Moisture",
-      () => SystemMoisture.moistureMap
+      () => SystemMoisture.baseMoistureMap
     );
 
     this.overlay.generateOverlay(
@@ -383,12 +348,12 @@ export class ManagerWebComponents {
       () => this.game.map.heightMap
     );
 
-    // this.overlay.generateOverlay(
-    //   GameSettings.options.gameSize.width,
-    //   GameSettings.options.gameSize.height,
-    //   "Sunlight",
-    //   () => this.game.map.shadowMap.shadowMap
-    // );
+    this.overlay.generateOverlayFromArray(
+      GameSettings.options.gameSize.width,
+      GameSettings.options.gameSize.height,
+      "Shadows",
+      () => SystemShadows.all
+    );
 
     this.overlay.generateBiomeOverlay(
       GameSettings.options.gameSize.width,
@@ -397,11 +362,11 @@ export class ManagerWebComponents {
       () => this.game.map.biomeMap
     );
 
-    // this.overlay.generateOverlay(
-    //   GameSettings.options.gameSize.width,
-    //   GameSettings.options.gameSize.height,
-    //   "Clouds",
-    //   () => this.game.map.cloudMap.targetCloudMap
-    // );
+    this.overlay.generateOverlayFromArray(
+      GameSettings.options.gameSize.width,
+      GameSettings.options.gameSize.height,
+      "Clouds",
+      () => SystemClouds.cloudMap
+    );
   }
 }

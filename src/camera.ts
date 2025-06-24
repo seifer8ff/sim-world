@@ -3,18 +3,12 @@ import { Point } from "./point";
 import * as PIXI from "pixi.js";
 import { Tile } from "./tile";
 import { UserInterface } from "./user-interface";
-import { KEYS, DIRS, Util } from "rot-js";
+import { KEYS, DIRS } from "rot-js";
 import { InputUtility } from "./input-utility";
 import TinyGesture from "tinygesture";
 import { Layer } from "./renderer";
-import {
-  generateId,
-  indexToPosition,
-  lerp,
-  lerpEaseInOut,
-  positionToIndex,
-} from "./misc-utility";
-import { HeightLayer, MapWorld } from "./map-world";
+import { lerpEaseInOut, positionToIndex } from "./misc-utility";
+import { MapWorld } from "./map-world";
 import { TileStats } from "./web-components/tile-info";
 import { Stages } from "./game-state";
 import { GameSettings } from "./game-settings";
@@ -88,7 +82,7 @@ export class Camera {
     };
 
     this.centerViewport(
-      this.ui.application.stage,
+      this.game.application.stage,
       this.ui.gameCanvasContainer.clientWidth,
       this.ui.gameCanvasContainer.clientHeight
     );
@@ -291,7 +285,7 @@ export class Camera {
   private initEventListeners() {
     window.onresize = () =>
       this.centerViewport(
-        this.ui.application.stage,
+        this.game.application.stage,
         this.ui.gameCanvasContainer.clientWidth,
         this.ui.gameCanvasContainer.clientHeight
       );
@@ -344,15 +338,22 @@ export class Camera {
       this.handleDoubleTap(gesture);
     });
 
-    this.ui.gameCanvasContainer.addEventListener("wheel", (e: WheelEvent) => {
-      if (this.game.gameState.stage !== Stages.Play) {
-        return;
-      }
-      this.handleMouseZoom(e),
-        {
-          passive: false,
-        };
-    });
+    this.ui.gameCanvasContainer.addEventListener(
+      "wheel",
+      this.handleMouseZoom,
+      { passive: true }
+    );
+
+    // this.ui.gameCanvasContainer.addEventListener(
+    //   "wheel",
+    //   (e: WheelEvent) => {
+    //     if (this.game.gameState.stage !== Stages.Play) {
+    //       return;
+    //     }
+    //     this.handleMouseZoom(e);
+    //   },
+    //   { passive: true }
+    // );
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       if (this.game.gameState.stage !== Stages.Play) {
         return;
@@ -385,7 +386,9 @@ export class Camera {
     const halfHeight = Math.ceil(height / 2);
     for (let x = center.x - halfWidth; x < center.x + halfWidth; x++) {
       for (let y = center.y - halfHeight; y < center.y + halfHeight; y++) {
-        tiles.push(positionToIndex(x, y, Layer.TERRAIN));
+        if (this.game.map.isTileInMap(x, y)) {
+          tiles.push(positionToIndex(x, y, Layer.TERRAIN));
+        }
       }
     }
     return tiles;
@@ -396,7 +399,7 @@ export class Camera {
     padded: Viewport;
   } {
     const center = this.getViewportCenterTile();
-    const scale = Tile.size * this.ui.application.stage.scale.x; // scale of the viewport in pixels per tile
+    const scale = Tile.size * this.game.application.stage.scale.x; // scale of the viewport in pixels per tile
     const modifier = GameSettings.options.toggles.debugViewport
       ? (this.ui.gameCanvasContainer.clientWidth / 8) * 2 // add modifier to each side of the viewport
       : 0;
@@ -425,48 +428,26 @@ export class Camera {
   private getViewportCenterTile(): Point {
     const halfTileSize = Tile.size / 2;
     const pivotXTile =
-      (this.game.userInterface.application.stage.pivot.x + halfTileSize) /
-      Tile.size;
+      (this.game.application.stage.pivot.x + halfTileSize) / Tile.size;
     const pivotYTile =
-      (this.game.userInterface.application.stage.pivot.y + halfTileSize) /
-      Tile.size;
-    let tilesOffsetX =
-      pivotXTile * this.game.userInterface.application.stage.scale.x;
+      (this.game.application.stage.pivot.y + halfTileSize) / Tile.size;
+    let tilesOffsetX = pivotXTile * this.game.application.stage.scale.x;
     tilesOffsetX = Math.ceil(pivotXTile) - 1; // Adjusting for centering
     const xPoint = tilesOffsetX;
     let tilesOffsetY =
-      (pivotYTile / Tile.size) *
-      this.game.userInterface.application.stage.scale.y;
+      (pivotYTile / Tile.size) * this.game.application.stage.scale.y;
     tilesOffsetY = Math.ceil(pivotYTile) - 1; // Adjusting for centering
     const yPoint = tilesOffsetY;
 
     return new Point(xPoint, yPoint);
   }
 
-  // private getViewportCenterTile(): Point {
-  //   const pivotXTile =
-  //     this.game.userInterface.gameDisplay.stage.pivot.x / Tile.size;
-  //   const pivotYTile =
-  //     this.game.userInterface.gameDisplay.stage.pivot.y / Tile.size;
-  //   let tilesOffsetX =
-  //     pivotXTile * this.game.userInterface.gameDisplay.stage.scale.x;
-  //   tilesOffsetX = Math.ceil(pivotXTile);
-  //   const xPoint = tilesOffsetX;
-  //   let tilesOffsetY =
-  //     (pivotYTile / Tile.size) *
-  //     this.game.userInterface.gameDisplay.stage.scale.y;
-  //   tilesOffsetY = Math.ceil(pivotYTile);
-  //   const yPoint = tilesOffsetY;
-
-  //   return new Point(xPoint, yPoint);
-  // }
-
   private handleInput(event: KeyboardEvent): boolean {
     let validInput = false;
     let code = event.keyCode;
     if (code in this.keyMap) {
       let diff = DIRS[8][this.keyMap[code]];
-      if (this.moveCamera(this.ui.application.stage, diff)) {
+      if (this.moveCamera(this.game.application.stage, diff)) {
         this.viewportTarget = null;
         validInput = true;
       }
@@ -474,7 +455,7 @@ export class Camera {
     } else if (code === KEYS.VK_HOME) {
       this.viewportTarget = null;
       this.centerViewport(
-        this.ui.application.stage,
+        this.game.application.stage,
         this.ui.gameCanvasContainer.clientWidth,
         this.ui.gameCanvasContainer.clientHeight
       );
@@ -486,10 +467,10 @@ export class Camera {
   private handlePointerDrag = (g: TinyGesture) => {
     this.panning = true;
     this.setSideMenuVisible(false);
-    this.ui.application.stage.pivot.x -=
-      g.velocityX / this.ui.application.stage.scale.x;
-    this.ui.application.stage.pivot.y -=
-      g.velocityY / this.ui.application.stage.scale.x;
+    this.game.application.stage.pivot.x -=
+      g.velocityX / this.game.application.stage.scale.x;
+    this.game.application.stage.pivot.y -=
+      g.velocityY / this.game.application.stage.scale.x;
     this.resetMomentum();
   };
 
@@ -523,9 +504,9 @@ export class Camera {
   };
 
   public screenToTilePos(x: number, y: number): Point {
-    let stageScale = this.ui.application.stage.scale.x;
+    let stageScale = this.game.application.stage.scale.x;
     let centerTile = this.viewportPadded.center;
-    let pivotPoint = this.ui.application.stage.pivot;
+    let pivotPoint = this.game.application.stage.pivot;
     let screenCenterX = this.ui.gameCanvasContainer.clientWidth / 2;
     let screenCenterY = this.ui.gameCanvasContainer.clientHeight / 2;
     // offset from click to center of screen, represented in tiles.
@@ -574,8 +555,8 @@ export class Camera {
       }
     }
 
-    this.ui.application.stage.pivot.x -= this.momentum.x;
-    this.ui.application.stage.pivot.y -= this.momentum.y;
+    this.game.application.stage.pivot.x -= this.momentum.x;
+    this.game.application.stage.pivot.y -= this.momentum.y;
   }
 
   private handlePanEnd = (g: TinyGesture) => {
@@ -597,14 +578,14 @@ export class Camera {
   private handlePinchZoom = (g: TinyGesture) => {
     const scaleSpeed = 0.6;
 
-    let scale = this.ui.application.stage.scale.x;
+    let scale = this.game.application.stage.scale.x;
     let scaleDelta = scale - g.scale;
     // modify the maps scale based on how much the user pinched
     scale += -1 * scaleDelta * scaleSpeed * scale;
     // clamp to reasonable values
     scale = Math.max(this.minZoom, Math.min(this.maxZoom, scale));
     this.currentZoom = scale;
-    this.ui.application.stage.scale.set(scale);
+    this.game.application.stage.scale.set(scale);
     if (GameSettings.options.toggles.enableCloudMask) {
       this.ui.components.skyMask.setSkyMaskVisibility(this.getNormalizedZoom());
     }
@@ -612,24 +593,26 @@ export class Camera {
 
   private handleDoubleTap = (g: TinyGesture) => {
     const zoomInAmount = 1.75;
-    let scale = this.ui.application.stage.scale.x * zoomInAmount;
+    let scale = this.game.application.stage.scale.x * zoomInAmount;
 
     scale = Math.max(this.minZoom, Math.min(this.maxZoom, scale));
 
-    this.ui.application.stage.scale.set(scale);
+    this.game.application.stage.scale.set(scale);
     if (GameSettings.options.toggles.enableCloudMask) {
       this.ui.components.skyMask.setSkyMaskVisibility(this.getNormalizedZoom());
     }
   };
 
   private handleMouseZoom = (e: WheelEvent) => {
-    e.preventDefault();
+    if (this.game.gameState.stage !== Stages.Play) {
+      return;
+    }
     const scaleSpeed = 0.1;
     const maxScaleSpeed = 0.35;
 
-    let pivotX = this.ui.application.stage.pivot.x;
-    let pivotY = this.ui.application.stage.pivot.y;
-    let scale = this.ui.application.stage.scale.x;
+    let pivotX = this.game.application.stage.pivot.x;
+    let pivotY = this.game.application.stage.pivot.y;
+    let scale = this.game.application.stage.scale.x;
 
     let scrollDelta = Math.max(-1, Math.min(1, e.deltaY));
     scrollDelta = Math.max(
@@ -653,7 +636,7 @@ export class Camera {
     // console.log("pivotX, pivotY", pivotX, pivotY);
 
     // update the scale and position of the stage
-    this.ui.application.stage.scale.set(scale);
+    this.game.application.stage.scale.set(scale);
     // this.ui.gameDisplay.stage.setTransform(
     //   this.game.userInterface.gameDisplay.stage.position.x,
     //   this.game.userInterface.gameDisplay.stage.position.y,
@@ -671,25 +654,9 @@ export class Camera {
   };
 
   private updateViewport() {
-    // OLD VIEWPORT AND NEW VIEWPORT MUST MATCH (PADDED VS UNPADDED)
-    const oldTiles = new Set(this.viewportUnpadded?.tiles || []);
     const viewport = this.calculateViewport();
     this.viewportPadded = viewport.padded;
     this.viewportUnpadded = viewport.unpadded;
-
-    const enteredTiles: number[] = [];
-    let point: Point;
-    // OLD VIEWPORT AND NEW VIEWPORT MUST MATCH (PADDED VS UNPADDED)
-    for (const tileIndex of this.viewportUnpadded?.tiles || []) {
-      if (!oldTiles.has(tileIndex)) {
-        point = indexToPosition(tileIndex, Layer.TERRAIN);
-        if (this.game.map.isPointInMap(point)) {
-          enteredTiles.push(tileIndex);
-        }
-      }
-    }
-
-    this.game.map.onTileEnterViewport(this.viewportUnpadded, enteredTiles);
   }
 
   public uiUpdate(deltaTime: number) {
@@ -714,17 +681,18 @@ export class Camera {
     // only update viewport if:
     // zoom/scale change
     // pivot change
-    if (!this.viewportPadded) {
-      this.updateViewport();
+    if (this.game.gameState.stage !== Stages.Play) {
+      return;
     }
     if (
+      !this.viewportPadded ||
       this.lastZoom !== this.currentZoom ||
-      this.lastPivot.x !== this.ui.application.stage.pivot.x ||
-      this.lastPivot.y !== this.ui.application.stage.pivot.y
+      this.lastPivot.x !== this.game.application.stage.pivot.x ||
+      this.lastPivot.y !== this.game.application.stage.pivot.y
     ) {
       this.lastZoom = this.currentZoom;
-      this.lastPivot.x = this.ui.application.stage.pivot.x;
-      this.lastPivot.y = this.ui.application.stage.pivot.y;
+      this.lastPivot.x = this.game.application.stage.pivot.x;
+      this.lastPivot.y = this.game.application.stage.pivot.y;
       this.updateViewport();
     }
   }
@@ -745,59 +713,28 @@ export class Camera {
       let newPivotX;
       let newPivotY;
       if (
-        Math.abs(this.ui.application.stage.pivot.x - targetPos.x) > 0.1 &&
-        Math.abs(this.ui.application.stage.pivot.y - targetPos.y) > 0.1
+        Math.abs(this.game.application.stage.pivot.x - targetPos.x) > 0.1 &&
+        Math.abs(this.game.application.stage.pivot.y - targetPos.y) > 0.1
       ) {
         newPivotX = lerpEaseInOut(
           deltaTime / 75,
-          this.ui.application.stage.pivot.x,
+          this.game.application.stage.pivot.x,
           targetPos.x
         );
         newPivotY = lerpEaseInOut(
           deltaTime / 75,
-          this.ui.application.stage.pivot.y,
+          this.game.application.stage.pivot.y,
           targetPos.y
         );
-        this.ui.application.stage.pivot.set(newPivotX, newPivotY);
+        this.game.application.stage.pivot.set(newPivotX, newPivotY);
       } else {
-        this.ui.application.stage.pivot.set(targetPos.x, targetPos.y);
+        this.game.application.stage.pivot.set(targetPos.x, targetPos.y);
         this.viewportTarget = null;
       }
     }
   }
 
   public getNormalizedZoom(): number {
-    return this.ui.application.stage.scale.x / (this.maxZoom - this.minZoom);
+    return this.game.application.stage.scale.x / (this.maxZoom - this.minZoom);
   }
-
-  // private handleZoom = (e: WheelEvent) => {
-  //   e.preventDefault();
-  //   const scaleSpeed = 0.1;
-
-  //   const pivotX = this.ui.gameDisplay.stage.pivot.x;
-  //   const pivotY = this.ui.gameDisplay.stage.pivot.y;
-  //   let scale = this.ui.gameDisplay.stage.scale.x;
-  //   let scaledX = (e.x - this.ui.gameDisplay.stage.x) / scale;
-  //   let scaledY = (e.y - this.ui.gameDisplay.stage.y) / scale;
-
-  //   // modify the scale based on the scroll delta
-  //   scale += -1 * Math.max(-1, Math.min(1, e.deltaY)) * scaleSpeed * scale;
-  //   // clamp to reasonable values
-  //   scale = Math.max(0.4, Math.min(10, scale));
-
-  //   this.currentZoom = scale;
-
-  //   // update the scale and position of the stage
-  //   this.ui.gameDisplay.stage.setTransform(
-  //     -scaledX * scale + e.x, // position
-  //     -scaledY * scale + e.y,
-  //     scale, // scale
-  //     scale,
-  //     null, // rotation
-  //     null, // skew
-  //     null,
-  //     pivotX, // keeep existing pivot
-  //     pivotY
-  //   );
-  // };
 }

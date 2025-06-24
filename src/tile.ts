@@ -20,7 +20,7 @@ export class Tile {
   static readonly size = 32; // target size for terrain layer
   static readonly denseSize = 8; // target and actual pixel size of dense layer tiles
   static readonly terrainTilePixelSize = 16; // actual pixel size of each terrain tile on disk
-  static readonly tileDensityRatio = Tile.size / Tile.denseSize;
+  static readonly tileDensityRatio = Tile.size / Tile.denseSize; // how many dense tiles fit in a terrain tile
   static Tilesets: Tileset = {}; // tiles organized by biome and season, used in tilemap
   static textures: Texture[] = []; // array of textures for all tiles, indexed by their unique id
   public static currentId = 0;

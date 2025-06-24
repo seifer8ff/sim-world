@@ -62,14 +62,11 @@ export class Renderer {
     const layerCount = Layer.UI;
     let layerSize =
       GameSettings.options.gameSize.width *
-      Tile.tileDensityRatio *
       GameSettings.options.gameSize.height *
       Tile.tileDensityRatio; // account for dense grid, like for plants
     let totalSize = layerSize * layerCount; // account for each layer
     console.log(
-      "total tile size across all layers, single",
-      totalSize,
-      layerSize
+      `Renderer initialized with ${layerCount} layers, each with size ${layerSize}, total size: ${totalSize}`
     );
   }
 
@@ -86,7 +83,7 @@ export class Renderer {
   }
 
   public renderDisplayObject(
-    displayObj: PIXI.Sprite | PIXI.AnimatedSprite,
+    displayObj: PIXI.DisplayObject,
     layer: Layer,
     tint?: ColorType
   ) {
@@ -130,7 +127,7 @@ export class Renderer {
   }
 
   // remove the sprite from the scene, immediately
-  removeFromScene(obj: Renderable, layer: Layer): void {
+  removeFromScene(obj: PIXI.DisplayObject, layer: Layer): void {
     switch (layer) {
       case Layer.GROUNDCOVER:
       case Layer.TERRAIN:

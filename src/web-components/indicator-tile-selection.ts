@@ -83,7 +83,7 @@ export class IndicatorTileSelection extends HTMLElement {
       const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
       // fill the grid with 16x16 tiles with a 1px border
       const borderSize = 1;
-      const scale = this.game.userInterface.application.stage.scale.x;
+      const scale = this.game.application.stage.scale.x;
       const tileSize = Tile.size * scale;
       const innerTileSize = tileSize - borderSize * 2; // Subtract border on both sides
       const width = this.canvas.width;
@@ -93,7 +93,7 @@ export class IndicatorTileSelection extends HTMLElement {
       const xOffset = (width % tileSize) / 2;
       const yOffset = (height % tileSize) / 2;
 
-      const pivot = this.game.userInterface.application.stage.pivot;
+      const pivot = this.game.application.stage.pivot;
       const pivotOffsetX = (pivot.x % Tile.size) * scale;
       const pivotOffsetY = (pivot.y % Tile.size) * scale;
 

@@ -1,4 +1,4 @@
-import { getScaledNoise, indexToXY, lerp, normalize } from "./misc-utility";
+import { getScaledNoise, lerp, positionToIndex } from "./misc-utility";
 import { Point } from "./point";
 import { BiomeId, Biomes } from "./biomes";
 import Noise from "rot-js/lib/noise/noise";
@@ -7,15 +7,13 @@ import { Layer } from "./renderer";
 import Simplex from "rot-js/lib/noise/simplex";
 import { MessageType } from "./system-clouds";
 import { DayPhase } from "./system-time";
-import { SystemTemperature } from "./system-temperature";
-import { SystemMoisture } from "./system-moisture";
-import { GameSettings } from "./game-settings";
 
 console.log("spawned map-clouds-worker");
 
+let mapBuffer: Float32Array; // reusable buffer for sending map data back
 let noise: Noise = new Simplex();
-let gameWidth: number;
-let gameHeight: number;
+let mapWidth: number;
+let mapHeight: number;
 let cloudStrength: number;
 let sunbeamStrength: number;
 let windSpeed: Point;
@@ -60,13 +58,10 @@ onmessage = (e) => {
     interpolateStrength(e.data.data);
     return;
   }
-  if (e.data.type === MessageType.ON_ENTER) {
-    onEnter(e.data.data);
-    return;
-  }
 };
 
 const init = (data: {
+  sharedBuffer: SharedArrayBuffer;
   gameWidth: number;
   gameHeight: number;
   cloudStrength: number;
@@ -95,8 +90,9 @@ const init = (data: {
     };
   };
 }) => {
-  gameWidth = data.gameWidth;
-  gameHeight = data.gameHeight;
+  mapBuffer = new Float32Array(data.sharedBuffer);
+  mapWidth = data.gameWidth;
+  mapHeight = data.gameHeight;
   cloudStrength = data.cloudStrength;
   sunbeamStrength = data.sunbeamStrength;
   sunbeamMaxLevel = data.sunbeamMaxLevel;
@@ -151,64 +147,41 @@ const update = (data: {
 }) => {
   updateWindSpeed();
   updateCloudOffset();
-  const updatedCloudMap = updateCloudMapForTiles(
-    data.tileIndexes,
-    data.heights,
-    data.temperatures,
-    data.moistures
-  );
+  updateCloudMap(data.heights, data.temperatures, data.moistures);
   postMessage({
     type: MessageType.UPDATE,
-    data: { cloudMap: updatedCloudMap, cloudStrength, sunbeamStrength },
+    data: { cloudStrength, sunbeamStrength },
   });
 };
 
-const onEnter = (data: {
-  tileIndexes: number[];
-  heights: number[];
-  temperatures: number[];
-  moistures: number[];
-}) => {
-  const updatedCloudMap = updateCloudMapForTiles(
-    data.tileIndexes,
-    data.heights,
-    data.temperatures,
-    data.moistures
-  );
-  postMessage({ type: MessageType.ON_ENTER, data: updatedCloudMap });
-};
-
-const updateCloudMapForTiles = (
-  tileIndexes: number[],
+const updateCloudMap = (
   heights: number[],
   temperatures: number[],
   moistures: number[]
-): Map<number, number> => {
+): void => {
   let posIndex: number;
-  let posXY: [number, number];
   let height: number;
   let temperature: number;
   let moisture: number;
-  const updatedMap = new Map<number, number>();
-  for (let i = 0; i < tileIndexes.length; i++) {
-    posIndex = tileIndexes[i];
-    height = heights[i];
-    temperature = temperatures[i];
-    moisture = moistures[i];
-    posXY = indexToXY(posIndex, Layer.TERRAIN, gameWidth, gameHeight);
-    updatedMap.set(
-      posIndex,
-      generateCloudLevel(
-        posXY[0],
-        posXY[1],
+
+  for (let i = 0; i < mapWidth; i++) {
+    for (let j = 0; j < mapHeight; j++) {
+      posIndex = positionToIndex(i, j, Layer.TERRAIN, mapWidth, mapHeight);
+      const tileX = i;
+      const tileY = j;
+      height = heights[posIndex];
+      temperature = temperatures[posIndex];
+      moisture = moistures[posIndex];
+      mapBuffer[posIndex] = generateCloudLevel(
+        tileX,
+        tileY,
         height,
         temperature,
         moisture,
         noise
-      )
-    );
+      );
+    }
   }
-  return updatedMap;
 };
 
 const generateCloudLevel = (
@@ -219,8 +192,8 @@ const generateCloudLevel = (
   moisture: number,
   noise: Noise
 ): number => {
-  let noiseX = x / gameWidth - 0.5;
-  let noiseY = y / gameHeight - 0.5;
+  let noiseX = x / mapWidth - 0.5;
+  let noiseY = y / mapHeight - 0.5;
 
   noiseX += cloudOffset.x;
   noiseY += cloudOffset.y;
@@ -336,205 +309,9 @@ const generateCloudLevel = (
   } else if (cloudLevel < 0) {
     cloudLevel = 0;
   }
+
   return cloudLevel;
 };
-
-// const generateCloudLevel = (
-//   x: number,
-//   y: number,
-//   height: number,
-//   temperature: number,
-//   moisture: number,
-//   noise: Noise
-// ): number => {
-//   let noiseX = x / gameWidth - 0.5;
-//   let noiseY = y / gameHeight - 0.5;
-
-//   noiseX += cloudOffset.x;
-//   noiseY += cloudOffset.y;
-
-//   let cloudLevel = 0;
-//   let cloudLevelNoise = 0;
-//   let offset = cloudGeneration.noiseOffset;
-//   const seaLevel = Biomes.Biomes.ocean.generationOptions.height.max + 0;
-//   // Biomes.Biomes.ocean.generationOptions.height.max / 5; // make the intensity boundary less sharp
-//   // const belowSeaLevel = height < seaLevel;
-//   // set a variable between - and 1 indicatining how far above sea level it is
-//   const aboveSeaLevel = height - seaLevel;
-//   // console.log(aboveSeaLevel);
-//   const belowSeaLevel = height < seaLevel;
-//   const cloudConfig = {
-//     size: 2,
-//     intensity: 0.5,
-//   };
-
-//   // base size and intensity on:
-//   // temp and moisture level
-//   // height
-//   // if below sea level, increase size and intensity
-//   // if high temp and high moisture, increase size and intensity
-//   // if high moisture, increase intensity
-//   // if low temp, decrease size
-//   //do this in an algorithmic way, maybe using lerp
-
-//   // mostly cloudy = cloudConfig.size: 5, cloudConfig.intensity: 0.85
-//   // partially cloudy = cloudConfig.size: 0.05, cloudConfig.intensity: 0.6
-//   // clear = cloudConfig.size: 0.1, cloudConfig.intensity: 0.27
-//   // moonlight = cloudConfig.size: 0.03, cloudConfig.intensity: 0.8
-
-//   const normalizedTemperature = normalize(
-//     (temperature - GameSettings.options.temperatureRange.min) /
-//       (GameSettings.options.temperatureRange.max -
-//         GameSettings.options.temperatureRange.min),
-//     0,
-//     1
-//   );
-//   // cloudConfig.size = lerp(1 - normalizedCloudSize, 0.1, 5);
-//   cloudConfig.size = 0.001;
-//   if (aboveSeaLevel > 0) {
-//     // decrease the size of the clouds as they go above sea level
-//     // cloudConfig.size = lerp(aboveSeaLevel, cloudConfig.size, 2);
-//   }
-//   // cloudConfig.size = 30;
-//   // if (belowSeaLevel) {
-//   //   cloudConfig.size = 0.001;
-//   // }
-//   // if (aboveSeaLevel > 0) {
-//   //   cloudConfig.size = lerp(aboveSeaLevel, )
-//   // }
-
-//   const normalizedMoisture = normalize(
-//     (moisture - GameSettings.options.moistureRange.min) /
-//       (GameSettings.options.moistureRange.max -
-//         GameSettings.options.moistureRange.min),
-//     0,
-//     1
-//   );
-//   // base visibility of clouds, goes down as they go above sea level
-//   let baseVisibility = 0.15;
-
-//   if (aboveSeaLevel > 0) {
-//     // normalizedHeight = aboveSeaLevel;
-//     // baseVisibility = lerp(1 - aboveSeaLevel, -0.5, 0.15);
-//     // console.log(baseVisibility);
-//     baseVisibility = -0.0;
-//   }
-
-//   // if (belowSeaLevel) {
-//   //   // normalizedHeight = 0.3;
-//   //   normalizedHeight = normalize((seaLevel - height) / seaLevel, 0, 0.15);
-//   //   // console.log("below sea level", normalizedHeight);
-//   // }
-//   // console.log(normalizedHeight);
-//   //take into account the temperature and moisture values
-//   // let intensity =
-//   //   0.15 + normalizedHeight + (normalizedTemperature + normalizedMoisture) / 2;
-//   let intensity =
-//     baseVisibility + (normalizedTemperature + normalizedMoisture) / 2;
-
-//   cloudConfig.intensity = lerp(intensity, 0.29, 0.9);
-//   // cloudConfig.intensity = 0.8;
-
-//   const cloudSize = cloudConfig.size;
-//   const cloudIntensity = cloudConfig.intensity;
-
-//   // basic big smooth soft clouds and sunbeams
-//   cloudLevelNoise =
-//     cloudIntensity *
-//     getScaledNoise(noise, cloudSize * noiseX, cloudSize * noiseY);
-//   cloudLevel += cloudLevelNoise;
-//   // medium clouds where there are no sunbeams
-//   cloudLevelNoise =
-//     (cloudIntensity + cloudGeneration.detailIntensityOffset1) *
-//     getScaledNoise(
-//       noise,
-//       cloudSize + cloudGeneration.detailNoiseOffset1 * (noiseX + offset),
-//       cloudSize + cloudGeneration.detailNoiseOffset1 * (noiseY + offset)
-//     );
-
-//   if (cloudLevel > sunbeamMaxLevel) {
-//     cloudLevel += cloudLevelNoise;
-//   }
-//   cloudLevelNoise =
-//     (cloudIntensity + cloudGeneration.detailIntensityOffset2) *
-//     getScaledNoise(
-//       noise,
-//       cloudSize + cloudGeneration.detailNoiseOffset2 * (noiseX + offset),
-//       cloudSize + cloudGeneration.detailNoiseOffset2 * (noiseY + offset)
-//     );
-
-//   if (cloudLevel > sunbeamMaxLevel) {
-//     cloudLevel += cloudLevelNoise;
-//   }
-
-//   if (cloudLevel > 1) {
-//     cloudLevel = 1;
-//   } else if (cloudLevel < 0) {
-//     cloudLevel = 0;
-//   }
-//   return cloudLevel;
-// };
-
-// const generateCloudLevel = (
-//   x: number,
-//   y: number,
-//   biomeId: BiomeId,
-//   noise: Noise
-// ): number => {
-//   let noiseX = x / gameWidth - 0.5;
-//   let noiseY = y / gameHeight - 0.5;
-
-//   noiseX += cloudOffset.x;
-//   noiseY += cloudOffset.y;
-
-//   let cloudLevel = 0;
-//   let cloudLevelNoise = 0;
-//   let offset = cloudGeneration.noiseOffset;
-//   // Get biome-specific cloud settings for this biome or use default
-//   // const biomeConfig = biomeClouds[biomeId] || biomeClouds["default"];
-//   // const cloudSize = biomeConfig.size;
-//   // const cloudIntensity = biomeConfig.intensity;
-//   const cloudConfig = {
-//     size: 1,
-//     intensity: 1,
-//   }
-
-//   // basic big smooth soft clouds and sunbeams
-//   cloudLevelNoise =
-//     cloudIntensity *
-//     getScaledNoise(noise, cloudSize * noiseX, cloudSize * noiseY);
-//   cloudLevel += cloudLevelNoise;
-//   // medium clouds where there are no sunbeams
-//   cloudLevelNoise =
-//     (cloudIntensity + cloudGeneration.detailIntensityOffset1) *
-//     getScaledNoise(
-//       noise,
-//       cloudSize + cloudGeneration.detailNoiseOffset1 * (noiseX + offset),
-//       cloudSize + cloudGeneration.detailNoiseOffset1 * (noiseY + offset)
-//     );
-
-//   if (cloudLevel > sunbeamMaxLevel) {
-//     cloudLevel += cloudLevelNoise;
-//   }
-//   cloudLevelNoise =
-//     (cloudIntensity + cloudGeneration.detailIntensityOffset2) *
-//     getScaledNoise(
-//       noise,
-//       cloudSize + cloudGeneration.detailNoiseOffset2 * (noiseX + offset),
-//       cloudSize + cloudGeneration.detailNoiseOffset2 * (noiseY + offset)
-//     );
-
-//   if (cloudLevel > sunbeamMaxLevel) {
-//     cloudLevel += cloudLevelNoise;
-//   }
-
-//   if (cloudLevel > 1) {
-//     cloudLevel = 1;
-//   } else if (cloudLevel < 0) {
-//     cloudLevel = 0;
-//   }
-//   return cloudLevel;
-// };
 
 const updateCloudOffset = () => {
   cloudOffset.x += windSpeed.x * baseWindSpeed;

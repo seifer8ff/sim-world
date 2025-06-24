@@ -3,7 +3,7 @@ import { Query } from "miniplex";
 import { Layer, Renderer } from "./renderer";
 import { Tile } from "./tile";
 import { Camera, Viewport } from "./camera";
-import { Sprite } from "pixi.js";
+import { DisplayObject, Sprite } from "pixi.js";
 import { generateId } from "./misc-utility";
 import { Color as ColorType } from "rot-js/lib/color";
 import { SystemActors } from "./system-actors";
@@ -69,7 +69,7 @@ export class SystemPointer {
       let { x, y } = position;
 
       if (Camera.inViewport(x, y, layer, viewport)) {
-        renderer.renderDisplayObject(sprite as Sprite, layer);
+        renderer.renderDisplayObject(sprite as DisplayObject, layer);
       }
     }
   }

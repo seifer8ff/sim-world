@@ -29,8 +29,11 @@ import { SystemMoisture } from "./system-moisture";
 import { SystemTemperature } from "./system-temperature";
 import { SystemPoles } from "./system-poles";
 import { SystemClouds } from "./system-clouds";
+import { Camera } from "./camera";
+import { Application, ICanvas } from "pixi.js";
 
 export class Game {
+  public application: Application<ICanvas>; // the main PIXI application
   public settings: GameSettings;
   public noise: Noise;
   public map: MapWorld;
@@ -40,10 +43,13 @@ export class Game {
   public actorManager: SystemActors;
   public pathfinder: SystemPathfinder;
   public userInterface: UserInterface;
+  public camera: Camera;
   public nameGenerator: GeneratorNames;
+  private setup: GameSetup;
   private turnAnimDelayCounter: number = 0; // how long to delay the game loop for (like when animations are playing)
 
   constructor() {
+    console.log("-- game constructor");
     this.settings = new GameSettings(this);
     if (GameSettings.options.gameSeed == undefined) {
       GameSettings.options.gameSeed = Math.floor(RNG.getUniform() * 1000000);
@@ -51,22 +57,37 @@ export class Game {
     RNG.setSeed(GameSettings.options.gameSeed);
     console.log("Game seed:", GameSettings.options.gameSeed);
     this.noise = new Simplex();
+    this.application = new Application({
+      resizeTo: window,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+      antialias: false,
+    });
+    this.application.stage.sortableChildren = true;
 
-    SystemTime.init();
-    this.animManager = new ManagerAnimation(this);
     this.gameState = new GameState();
-    this.map = new MapWorld(this);
-    this.nameGenerator = new GeneratorNames(this);
+    this.setup = new GameSetup(this);
     this.userInterface = new UserInterface(this);
-    this.renderer = new Renderer(this);
-    this.actorManager = new SystemActors(this);
+
+    this.userInterface.gameCanvasContainer.appendChild(
+      this.application.view as HTMLCanvasElement
+    );
+    globalThis.__PIXI_APP__ = this.application;
   }
 
   public async Init(): Promise<boolean> {
-    await InitAssetsStage1();
-    this.gameState.reset();
-    await this.userInterface.init();
-    await InitAssetsStage2(this.userInterface.application);
+    this.pathfinder = new SystemPathfinder(this);
+    this.animManager = new ManagerAnimation(this);
+    this.map = new MapWorld(this);
+    this.nameGenerator = new GeneratorNames(this);
+
+    this.renderer = new Renderer(this);
+    this.actorManager = new SystemActors(this);
+
+    await InitAssetsStage1(); // generates assets that do not require rendering, like spritesheets
+    await InitAssetsStage2(this.application); // generates assets that require rendering, like custom textures
+    this.renderer.addLayersToStage(this.application.stage);
+    this.camera = new Camera(this, this.userInterface);
 
     return true;
   }
@@ -80,34 +101,6 @@ export class Game {
       .setDraw(this.renderLoop.bind(this))
       .setEnd(this.endLoop.bind(this))
       .start();
-  }
-
-  public resetGame(): void {
-    SystemPoles.init();
-    SystemTemperature.init();
-    SystemMoisture.init();
-    SystemShadows.init();
-    SystemOcclusion.init();
-    SystemClouds.init();
-    this.map.lightManager.init();
-    this.renderer.init();
-    SystemLLM.init();
-    this.gameState.reset();
-    this.userInterface.components.init();
-  }
-
-  public async generateWorld(): Promise<boolean> {
-    this.gameState.loading = true;
-    this.map.generateMap(
-      GameSettings.options.gameSize.width,
-      GameSettings.options.gameSize.height
-    );
-    SystemCollision.init();
-    this.pathfinder = new SystemPathfinder(this);
-    // let a few turns pass, do any world setup needed
-    const gameSetup = new GameSetup(this);
-    gameSetup.init();
-    return true;
   }
 
   private async startLoop() {
@@ -126,8 +119,13 @@ export class Game {
 
   private mainLoop(deltaTime: number) {
     if (this.gameState.stage === Stages.Play) {
-      if (!this.gameState.worldSetupComplete) {
-        this.generateWorld();
+      // generate the map and entities
+      // skip the game loop
+      // run the render loop until this.gameState.loading is false
+      // to allow UI rendering
+      if (this.gameState.loading && !this.gameState.worldSetupComplete) {
+        this.setup.initialSetup();
+        this.gameState.worldSetupComplete = true;
         return;
       }
       this.uiLoop(deltaTime);
@@ -150,8 +148,10 @@ export class Game {
 
   public gameLoop() {
     const turn = SystemTime.currentTurn;
-    const viewport = this.userInterface.camera.viewportUnpadded;
+    const viewport = this.camera.viewportUnpadded;
     let actors: ActorBase[] = [];
+
+    // console.log("game loop, viewport", viewport);
 
     // loop through ALL actors each turn
     while (turn === SystemTime.currentTurn) {
@@ -178,6 +178,10 @@ export class Game {
         })
       );
 
+      if (this.gameState.loading) {
+        return;
+      }
+
       // actor-related updates
       SystemShrubs.updateSpacialMap(SystemActors.queries.groundCoverGrowth);
       SystemShrubs.updateGrowth(
@@ -193,9 +197,9 @@ export class Game {
       this.map.lightManager.turnUpdate();
       SystemSunMoon.turnUpdate();
       SystemTemperature.turnUpdate();
-      SystemOcclusion.turnUpdate(this.map, viewport.tiles);
-      SystemShadows.turnUpdate(viewport, this.map);
-      SystemClouds.turnUpdate(this.map, viewport.tiles);
+      SystemOcclusion.turnUpdate();
+      SystemShadows.turnUpdate();
+      SystemClouds.turnUpdate(this.map);
 
       // update dynamic lights after all actors have moved
       // will get picked up in next render
@@ -215,9 +219,9 @@ export class Game {
       this.settings.stats?.begin();
     }
 
-    this.userInterface.camera.renderUpdate(interpPercent);
+    this.camera.renderUpdate(interpPercent);
 
-    const viewport = this.userInterface.camera.viewportUnpadded;
+    const viewport = this.camera.viewportUnpadded;
     const lightManager = this.map.lightManager;
 
     if (this.gameState.stage === Stages.Play) {
@@ -243,7 +247,6 @@ export class Game {
       viewport
     );
     this.userInterface.renderUpdate();
-    this.userInterface.components.renderUpdate();
 
     if (this.gameState.stage === Stages.Play) {
       this.renderer.clearSceneLayers([
@@ -296,7 +299,7 @@ export class Game {
   }
 
   private async uiLoop(deltaTime: number) {
-    this.userInterface.camera.uiUpdate(deltaTime);
+    this.camera.uiUpdate(deltaTime);
     // loop through all ui components and run a refresh on them
     this.userInterface.components.refreshComponents();
   }

@@ -25,7 +25,7 @@ export class MoveAction implements Action {
 
   run(): Promise<{ movementVector: [number, number] }> {
     // Animated based on the sprites screen position
-    const oldPos = this.game.userInterface.camera.TileToScreenCoords(
+    const oldPos = this.game.camera.TileToScreenCoords(
       this.actor.position.x,
       this.actor.position.y,
       Layer.ACTOR
@@ -41,7 +41,7 @@ export class MoveAction implements Action {
       const nextTilePos = this.actor.position.add(
         new Point(movementVector[0], movementVector[1])
       );
-      const newPos = this.game.userInterface.camera.TileToScreenCoords(
+      const newPos = this.game.camera.TileToScreenCoords(
         nextTilePos.x,
         nextTilePos.y
       );

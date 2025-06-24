@@ -1,13 +1,14 @@
 import { DayPhase, SystemTime } from "./system-time";
+
 /**
- * Manages sun and moon position, elevation, etc.
+ * Implementation class for sun and moon position management
  * used to calculate shadows and lighting, among other things.
  */
-export class SystemSunMoon {
+export class SystemSunMoonImplementation {
   // Sun positioning
-  public static angle = Math.PI / 4; // 45 degrees
-  public static elevation: number = 0.5; // 0 to 1
-  private static logging: boolean = false; // Enable logging for debugging
+  public angle = Math.PI / 4; // 45 degrees
+  public elevation: number = 0.5; // 0 to 1
+  private logging: boolean = false; // Enable logging for debugging
 
   /**
    * Update sun/moon position based on time of day
@@ -16,25 +17,25 @@ export class SystemSunMoon {
   // - start: angle = 0 or 2π (0° or 360°) [WEST]
   // - mid: angle = π/2 (90°) [North]
   // - end: angle = π (180°) [EAST]
-  public static turnUpdate() {
+  public turnUpdate() {
     if (SystemTime.isDayTime) {
       // Update sun angle based on time of day
-      SystemSunMoon.updateSunPosition();
+      this.updateSunPosition();
     } else {
       // Update moon position if needed (not implemented yet)
-      SystemSunMoon.updateMoonPosition();
+      this.updateMoonPosition();
     }
   }
 
   /**
    * Update shadows during rendering (every frame)
    */
-  public static renderUpdate(interpPercent: number, tiles: number[]) {}
+  public renderUpdate(interpPercent: number, tiles: number[]) {}
 
   /**
    * Updates sun position based on time of day and season
    */
-  private static updateSunPosition() {
+  private updateSunPosition() {
     // Get time parameters
     const dayLength = SystemTime.dayLength;
     const currentTime = SystemTime.currentTime;
@@ -45,15 +46,12 @@ export class SystemSunMoon {
 
     // Calculate sun elevation using smoothed sine curve
     // Sun: highest at noon (daytime progress = 0.5)
-    SystemSunMoon.elevation = Math.max(
-      0.05,
-      Math.sin(Math.PI * daytimeProgress)
-    );
+    this.elevation = Math.max(0.05, Math.sin(Math.PI * daytimeProgress));
 
     // Calculate sun angle for CLOCKWISE motion
-    SystemSunMoon.angle = Math.PI * daytimeProgress;
+    this.angle = Math.PI * daytimeProgress;
 
-    SystemSunMoon.applySpecialModifiers(lightPhase);
+    this.applySpecialModifiers(lightPhase);
 
     this.logPositionDetails();
   }
@@ -61,7 +59,7 @@ export class SystemSunMoon {
   /**
    * Updates moon position during nighttime
    */
-  private static updateMoonPosition() {
+  private updateMoonPosition() {
     const nightLength = SystemTime.nightLength;
     const currentTime = SystemTime.currentTime;
     const dayLength = SystemTime.dayLength;
@@ -71,10 +69,10 @@ export class SystemSunMoon {
 
     // Calculate moon elevation using smoothed sine curve
     // Moon: highest at midnight (night progress = 0.5)
-    SystemSunMoon.elevation = Math.max(0.05, Math.sin(Math.PI * nightProgress));
+    this.elevation = Math.max(0.05, Math.sin(Math.PI * nightProgress));
 
     // Calculate moon angle for CLOCKWISE motion continuing from sunset
-    SystemSunMoon.angle = Math.PI * nightProgress;
+    this.angle = Math.PI * nightProgress;
     this.logPositionDetails();
   }
 
@@ -83,7 +81,7 @@ export class SystemSunMoon {
    * This function adjusts the sun's elevation based on the time of day
    * to create more dramatic and realistic shadow effects.
    */
-  private static applySpecialModifiers(lightPhase: DayPhase) {
+  private applySpecialModifiers(lightPhase: DayPhase) {
     // Special handling for evening shadows
     if (lightPhase === DayPhase.evening) {
       // Control parameters for the evening shadow transition
@@ -104,11 +102,11 @@ export class SystemSunMoon {
       // Artificially lower the sun's elevation during evening to create longer shadows
       // This simulates the real-world phenomenon of longer shadows at sunset
       const minElevation = 0.05; // Prevent the sun from going completely flat
-      const originalElevation = SystemSunMoon.elevation; // Store original calculated elevation
+      const originalElevation = this.elevation; // Store original calculated elevation
 
       // Reduce the sun's elevation proportionally to the evening's progression
       // The 0.8 factor controls how much to lower the sun (80% max reduction)
-      SystemSunMoon.elevation = Math.max(
+      this.elevation = Math.max(
         minElevation,
         originalElevation * (1 - quickTransition * 0.8)
       );
@@ -117,7 +115,7 @@ export class SystemSunMoon {
     // Could add similar enhancements for other phases as needed
   }
 
-  private static logPositionDetails() {
+  private logPositionDetails() {
     if (!this.logging) return; // Skip logging if disabled
     // Log celestial position details for debugging
     const currentTime = SystemTime.currentTime;
@@ -136,8 +134,44 @@ export class SystemSunMoon {
       `${SystemTime.isDayTime ? "Sun " : "moon "}` +
         `time=${currentTime}/${totalDayLength}, ` +
         progress +
-        `Position: angle=${(SystemSunMoon.angle * 180) / Math.PI}°, ` +
-        `elevation=${SystemSunMoon.elevation.toFixed(2)}`
+        `Position: angle=${(this.angle * 180) / Math.PI}°, ` +
+        `elevation=${this.elevation.toFixed(2)}`
     );
+  }
+}
+
+/**
+ * Manages sun and moon position, elevation, etc.
+ * used to calculate shadows and lighting, among other things.
+ */
+export class SystemSunMoon {
+  private static instance = new SystemSunMoonImplementation();
+
+  /**
+   * Update sun/moon position based on time of day
+   */
+  static turnUpdate() {
+    return this.instance.turnUpdate();
+  }
+
+  /**
+   * Update shadows during rendering (every frame)
+   */
+  static renderUpdate(interpPercent: number, tiles: number[]) {
+    return this.instance.renderUpdate(interpPercent, tiles);
+  }
+
+  /**
+   * Get the current sun/moon angle
+   */
+  static get angle(): number {
+    return this.instance.angle;
+  }
+
+  /**
+   * Get the current sun/moon elevation
+   */
+  static get elevation(): number {
+    return this.instance.elevation;
   }
 }

@@ -5,7 +5,7 @@ import { Camera, Viewport } from "./camera";
 import { Tile } from "./tile";
 import { indexToPosition } from "./misc-utility";
 import { LightManager, RGBAColor } from "./light-manager";
-import { Point, Texture } from "pixi.js";
+import { DisplayObject, Texture } from "pixi.js";
 import { MapWorld } from "./map-world";
 import { Color as ColorType } from "rot-js/lib/color";
 import { Species, SpeciesId } from "./species";
@@ -191,7 +191,7 @@ export class SystemStatic {
       let { x, y } = position;
 
       if (Camera.inViewport(x, y, layer, viewport)) {
-        renderer.renderDisplayObject(sprite, layer);
+        renderer.renderDisplayObject(sprite as DisplayObject, layer);
       }
     }
   }

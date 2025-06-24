@@ -42,6 +42,20 @@ After cloning the repository:
   npx concurrently npm:watch npm:serve
   ```
 
+## How to run with LLM
+
+Start up Jan.ai
+
+- use model mistral:7b
+
+- start local api server
+
+- start up game
+
+- enable the LLM option
+
+- select an entity and open up the console to see the LLM output
+
 ## Development Guide
 
 This project uses rot.js as the game framework, and pixijs for rendering and handling sprites.

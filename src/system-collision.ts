@@ -16,7 +16,6 @@ export class SystemCollision {
     const layerCount = Layer.UI + 1; // must match renderer to have matching indexes
     let gridSize =
       GameSettings.options.gameSize.width *
-      Tile.tileDensityRatio *
       GameSettings.options.gameSize.height *
       Tile.tileDensityRatio; // account for dense grid, like for plants
     gridSize *= layerCount; // account for each layer

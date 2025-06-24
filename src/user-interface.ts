@@ -2,21 +2,15 @@ import { KEYS } from "rot-js/lib/index";
 import { Game } from "./game";
 import { MessageLog } from "./message-log";
 import * as PIXI from "pixi.js";
-import { Camera } from "./camera";
 import { ManagerWebComponents } from "./manager-web-components";
 import { BiomeId } from "./biomes";
 import { SystemTime } from "./system-time";
+import { Stages } from "./game-state";
 
 export class UserInterface {
-  public application: PIXI.Application<PIXI.ICanvas>;
-  public camera: Camera;
   public messageLog: MessageLog;
   public gameCanvasContainer: HTMLElement;
-
   public gameContainer: HTMLElement;
-  private gameDisplayOptions: Partial<PIXI.IApplicationOptions>;
-  private keyMap: { [key: number]: number };
-
   public components: ManagerWebComponents;
 
   constructor(private game: Game) {
@@ -24,27 +18,8 @@ export class UserInterface {
 
     this.gameContainer = document.getElementById("gameContainer");
     this.gameCanvasContainer = document.getElementById("canvasContainer");
-
-    this.gameDisplayOptions = {
-      resizeTo: window,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-      antialias: false,
-    };
-
-    this.application = new PIXI.Application(this.gameDisplayOptions);
-    this.application.stage.sortableChildren = true;
-
-    // let colorMatrix = new PIXI.ColorMatrixFilter();
-    // colorMatrix.night(0.2, false);
-    // this.application.stage.filters = [colorMatrix];
-
-    this.gameCanvasContainer.appendChild(
-      this.application.view as HTMLCanvasElement
-    );
     this.messageLog = new MessageLog(this.game);
-    this.camera = new Camera(this.game, this);
-    globalThis.__PIXI_APP__ = this.application;
+
     this.initEventListeners();
   }
 
@@ -61,10 +36,6 @@ export class UserInterface {
     if (event.keyCode === KEYS.VK_SPACE) {
       SystemTime.togglePause();
     }
-  }
-
-  public async init() {
-    this.game.renderer.addLayersToStage(this.application.stage);
   }
 
   public initializeBuildTools(): void {
@@ -112,6 +83,25 @@ export class UserInterface {
   }
 
   renderUpdate(): void {
-    this.components.updateTimeControl();
+    if (this.game.gameState.isLoading()) {
+      if (this.game.gameState.stage === Stages.Title) {
+        this.components.titleMenu.setCollapsed(false);
+        this.components.sideMenu?.setVisible(false, true);
+        this.components.timeControl?.setVisible(false);
+      } else if (this.game.gameState.stage === Stages.Play) {
+        this.components.titleMenu?.setCollapsed(true);
+        this.components.sideMenu.setVisible(true, true);
+        this.components.timeControl.setVisible(true);
+      }
+      this.game.gameState.loading = false;
+    }
+    if (this.game.gameState.stage === Stages.Title) {
+      if (this.components.tileSelectionIndicator) {
+        this.components.tileSelectionIndicator.renderUpdate();
+      }
+    }
+    if (this.game.gameState.stage === Stages.Play) {
+      this.components.updateTimeControl();
+    }
   }
 }

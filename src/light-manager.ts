@@ -4,7 +4,11 @@ import PreciseShadowcasting from "rot-js/lib/fov/precise-shadowcasting";
 import { MapWorld } from "./map-world";
 import { Color as ColorType } from "rot-js/lib/color";
 import { Tile } from "./tile";
-import { multiColorLerp, positionToIndex } from "./misc-utility";
+import {
+  indexToPosition,
+  multiColorLerp,
+  positionToIndex,
+} from "./misc-utility";
 import { BiomeId } from "./biomes";
 import { GameSettings } from "./game-settings";
 import { Layer } from "./renderer";
@@ -65,8 +69,8 @@ export class LightManager {
       // cloudShadow: [50, 50, 55], // how much to reduce from full brightness when in cloud shadow
       cloudShadow: [20, 20, 27], // how much to reduce from full brightness when in cloud shadow
       cloudShadowSetting: [60, 60, 60], // how much to reduce from full brightness when in cloud shadow
-      shadowSunset: [200, 60, 40],
-      shadowSunrise: [30, 30, 42], // blue
+      shadowSunset: [135, 80, 60],
+      shadowSunrise: [50, 50, 62], // blue
     };
     this.lightEmitterById = {};
     // this.worker = new Worker(new URL("./light-worker.ts", import.meta.url));
@@ -88,20 +92,14 @@ export class LightManager {
   }
 
   public init() {
-    this.camera = this.game.userInterface.camera;
+    console.log("init light manager");
+    this.camera = this.game.camera;
     const layerCount = Layer.UI;
     let layerSize =
       GameSettings.options.gameSize.width *
-      Tile.tileDensityRatio *
       GameSettings.options.gameSize.height *
       Tile.tileDensityRatio; // account for dense grid, like for plants
     let totalSize = layerSize * layerCount; // account for each layer
-    // console.log(
-    //   "total tile size across all layers, single",
-    //   totalSize,
-    //   layerSize
-    // );
-    // this.spriteIndexCache = new Int32Array(totalSize).fill(-1);
 
     this.dynamicLightMap = [];
     this.lightMapR = new Int32Array(totalSize);
@@ -210,6 +208,7 @@ export class LightManager {
   }
 
   public clearLightMap() {
+    console.log("clearing light map");
     let posIndex = -1;
     for (let i = 0; i < GameSettings.options.gameSize.width; i++) {
       for (let j = 0; j < GameSettings.options.gameSize.height; j++) {
@@ -377,9 +376,7 @@ export class LightManager {
 
   public calculateLightMap(tiles: number[]) {
     const dynamicLightMap = this.dynamicLightMap;
-    const shadowMap = SystemShadows.shadowMap;
-    // const occlusionMap = this.map.shadowMap.occlusionMap;
-    const occlusionMap = SystemOcclusion.occlusionMap;
+    const shadowMap = SystemShadows.all;
     const cloudMap = SystemClouds.cloudMap;
     let dynamicLightValue: ColorType;
     let shadowValue: number;
@@ -390,8 +387,9 @@ export class LightManager {
     for (let posIndex of tiles) {
       dynamicLightValue = dynamicLightMap[posIndex];
       shadowValue = shadowMap[posIndex];
-      occlusionValue = occlusionMap[posIndex];
+      occlusionValue = SystemOcclusion.atIndex(posIndex);
       cloudValue = cloudMap[posIndex];
+
       light = this.calculateLight(
         dynamicLightValue,
         shadowValue,
@@ -719,6 +717,54 @@ export class LightManager {
   //   }
   //   return light;
   // }
+
+  public getTotalLight(x: number, y: number): number {
+    const posIndex = positionToIndex(x, y, Layer.TERRAIN);
+    // console.throttle(250).log("lightFromClouds", lightFromClouds, cloudLevel);
+    let totalLight = 1;
+    if (GameSettings.options.toggles.enableGlobalLights) {
+      totalLight = SystemTime.remainingPhasePercent;
+    }
+
+    if (GameSettings.options.toggles.enableOcclusionShadows) {
+      const occlusionAmount = SystemOcclusion.atIndex(posIndex);
+      const isOccluded = occlusionAmount > 0;
+      if (isOccluded) {
+        // console.log("occlusionAmount", occlusionAmount);
+        totalLight *= 1 - occlusionAmount * SystemOcclusion.strengthMultiplier;
+      }
+    }
+
+    if (GameSettings.options.toggles.enableSunShadows) {
+      const shadowAmount = SystemShadows.all[posIndex];
+      const isShadowed = shadowAmount > 0;
+      if (isShadowed) {
+        // console.log("shadowAmount", shadowAmount);
+        totalLight *= 1 - shadowAmount * SystemShadows.shadowStrength;
+      }
+    }
+    // if (isShadowed) {
+    //   totalLight *= shadowAmount;
+    // }
+
+    if (GameSettings.options.toggles.enableClouds) {
+      let cloudAmount = SystemClouds.atIndex(posIndex);
+      cloudAmount -= SystemClouds.cloudMinLevel;
+      const isCloudy = cloudAmount > 0;
+      if (isCloudy) {
+        // console.log("cloudAmount", cloudAmount);
+        totalLight *= 1 - cloudAmount * SystemClouds.cloudStrength;
+      }
+    }
+    // can go over 1 due to lightening effect from sunbeams/clouds
+    if (totalLight < 0) {
+      totalLight = 0;
+    }
+    if (totalLight > 1) {
+      totalLight = 1;
+    }
+    return totalLight;
+  }
 
   public get(index: number): ColorType {
     return [

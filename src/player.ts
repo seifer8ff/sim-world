@@ -109,7 +109,7 @@ export class Player {
     } else {
       validInput = code === KEYS.VK_NUMPAD5; // Wait a turn
     }
-    this.game.userInterface.camera.centerOn(this.position.x, this.position.y);
+    this.game.camera.centerOn(this.position.x, this.position.y);
     return validInput;
   }
 
